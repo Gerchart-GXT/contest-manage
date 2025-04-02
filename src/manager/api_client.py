@@ -1,5 +1,6 @@
 import requests
 import json
+from logger import logger
 
 class APIClient:
     def __init__(self, base_url, api_key):
@@ -16,6 +17,7 @@ class APIClient:
             "action": "USERSET",
             "user_data": user_data
         }
+        logger.info(f"Set user {self.base_url}/client/user, {user_data}")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()
 
@@ -24,6 +26,7 @@ class APIClient:
         payload = {
             "action": "GET"
         }
+        logger.info(f"Get status {self.base_url}/client/status")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()
 
@@ -32,6 +35,7 @@ class APIClient:
         payload = {
             "action": "get"
         }
+        logger.info(f"Get log {self.base_url}/client/log")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()
 
@@ -43,6 +47,7 @@ class APIClient:
             "content": content,
             "window_id": window_id
         }
+        logger.info(f"Window {window_id} {action}, {self.base_url}/client/info")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()
 
@@ -52,5 +57,6 @@ class APIClient:
             "action": "run",
             "content": command
         }
+        logger.info(f"Run command {self.base_url}/client/command")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()

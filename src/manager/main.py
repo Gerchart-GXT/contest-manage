@@ -1,11 +1,14 @@
 from api_client import APIClient
-from datetime import date
+from datetime import datetime, date
 from utility import Utility
+from logger import logger
 import pandas as pd
 import subprocess
 import copy
+import sys
 import platform
 import re
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOM_ID = "101"
@@ -47,10 +50,9 @@ def read_client_excel():
                 key: row[alias] for key, alias in CLIENT_EXCEL_TITLE.items()
             }
             CLIENT_DATA.append(client_info)
-
-        print("Excel 文件读取成功，数据已存入 CLIENT_DATA。")
+        logger.info(f"Read client Excel {CLIENT_EXCEL_PATH} successfully!")
     except Exception as e:
-        print(f"读取 Excel 文件时出错: {e}")
+        logger.error(f"Read client Excel {CLIENT_EXCEL_PATH} error: {e}")
 
 def write_client_excel():
     """
@@ -70,7 +72,21 @@ def write_client_excel():
 
     # 将 DataFrame 写入 Excel 文件
     df.to_excel(CLIENT_EXCEL_PATH, index=False)
-    print(f"考生数据已成功写入 {CLIENT_EXCEL_PATH}")
+    logger.info(f"Save client Excel {CLIENT_EXCEL_PATH} successfully!")
+
+def parse_ip_range(ip_range):
+    """
+    解析 IP 范围，生成所有需要测试的 IP 地址。
+    """
+    match = re.match(r"(\d+\.\d+\.\d+\.)(\d+)-(\d+)", ip_range)
+    if not match:
+        raise ValueError("IP 范围格式不正确，应为 '192.168.0.1-100' 格式")
+
+    base_ip, start, end = match.groups()
+    start = int(start)
+    end = int(end)
+
+    return [f"{base_ip}{i}" for i in range(start, end + 1)]
 
 def ping_test(max_workers=50):
     """
@@ -79,19 +95,6 @@ def ping_test(max_workers=50):
     :return: 可用的 IP 地址列表
     """
     global IP_RANGE
-    def parse_ip_range(ip_range):
-        """
-        解析 IP 范围，生成所有需要测试的 IP 地址。
-        """
-        match = re.match(r"(\d+\.\d+\.\d+\.)(\d+)-(\d+)", ip_range)
-        if not match:
-            raise ValueError("IP 范围格式不正确，应为 '192.168.0.1-100' 格式")
-
-        base_ip, start, end = match.groups()
-        start = int(start)
-        end = int(end)
-
-        return [f"{base_ip}{i}" for i in range(start, end + 1)]
 
     def ping_ip(ip):
         """
@@ -120,7 +123,7 @@ def ping_test(max_workers=50):
 
     # 解析 IP 范围
     ip_list = parse_ip_range(IP_RANGE)
-
+    logger.info(f"Ping test for {IP_RANGE}")
     # 使用多线程并发 Ping
     available_ips = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -129,6 +132,7 @@ def ping_test(max_workers=50):
             result = future.result()
             if result:
                 available_ips.append(result)
+    logger.info(f"Available ip count: {len(available_ips)}")
 
     return sorted(available_ips, key=lambda ip: tuple(map(int, ip.split('.'))))
 
@@ -142,6 +146,7 @@ def map_client_to_ip(available_ips):
     global ROOM_ID
     global CLIENT_DATA
     # 遍历考生数据，分配 IP 地址
+    logger.info(f"Client count {len(CLIENT_DATA)}")
     for i, client in enumerate(CLIENT_DATA):
         # 添加 user_room 字段
         client["user_room"] = ROOM_ID
@@ -150,21 +155,23 @@ def map_client_to_ip(available_ips):
             client["user_ip"] = available_ips[i]
         else:
             client["user_ip"] = None  # 如果 IP 地址不足，设置为 None
+        logger.info(f"Mapping {client["user_name"]}({client["user_id"]}) to {client["user_ip"]}")
     return CLIENT_DATA
     
-def set_client_config():
+def set_client_info():
     global CLIENT_DATA
-    successed_client = []
-    unsuccessed_client = []
+    client_response = []
     for client in CLIENT_DATA:
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.set_user(client)
         if(response["status"] == "success"):
-            successed_client.append(client)
+            logger.info(f"Set client info {client["user_ip"]} to {client["user_name"]} successfully!")
+            client_response.append((client, response))
         else:
-            unsuccessed_client.append(client)
-    return successed_client
+            logger.error(f"Set client info {client["user_ip"]} to {client["user_name"]} Failed!")
+            client_response.append((client, response))
+    return client_response
 
 def get_client_status():
     global CLIENT_DATA
@@ -172,8 +179,12 @@ def get_client_status():
     for client in CLIENT_DATA:
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.get_status(client["user_id"])
+        response = client_connect.get_status()
         client_status.append((client, response))
+        if(response["status"] == "success"):
+            logger.info(f"Get client status {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Get client status {client["user_ip"]} {client["user_name"]} Failed!")
     return client_status
 
 def get_client_log():
@@ -184,6 +195,10 @@ def get_client_log():
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.get_log()
         client_log.append((client, response))
+        if(response["status"] == "success"):
+            logger.info(f"Get client logs {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Get client logs {client["user_ip"]} {client["user_name"]} Failed!")
     return client_log
 
 def open_info_window(title, content, window_id):
@@ -194,6 +209,10 @@ def open_info_window(title, content, window_id):
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("on", title, content, window_id)
         window_status.append((client, response))
+        if(response["status"] == "success"):
+            logger.info(f"Open info window {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Open info window {client["user_ip"]} {client["user_name"]} Failed!")
     return window_status
 
 def close_info_window(window_id):
@@ -204,6 +223,10 @@ def close_info_window(window_id):
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("off", window_id=window_id)
         window_status.append((client, response))
+        if(response["status"] == "success"):
+            logger.info(f"Close info window {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Close info window {client["user_ip"]} {client["user_name"]} Failed!")
     return window_status
 
 def run_command(command):
@@ -214,13 +237,110 @@ def run_command(command):
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.execute_command(command)
         command_return.append((client, response))
+        if(response["status"] == "success"):
+            logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Run command {client["user_ip"]} {client["user_name"]} Failed!")
     return command_return
 
-
-        
-if __name__ == "__main__":
+def main():
     read_client_excel()
-    # map_client_to_ip(ping_test())
-    # write_client_excel()
+    args = sys.argv[1:]
+    if args[0] == "update-client-list":
+        map_client_to_ip(ping_test())
+        write_client_excel()
+    elif args[0] == "ping":
+        total_ips = parse_ip_range(IP_RANGE)
+        available_ips = ping_test()
+        a_ips_p = 0
+        connect = 0
+        disconnect = 0
+        for ip in total_ips:
+            if available_ips[a_ips_p] == ip:
+                connect += 1
+                a_ips_p += 1
+            else :
+                disconnect += 1
+                logger.warning(f"{ip} is lost")
+        logger.info(f"Ping: Available {connect}, loss {disconnect}, total {connect + disconnect}")
+    elif args[0] == "set-client-info":
+        response= set_client_info()
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} set client info failed!")
+        logger.info(f"Set client info: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "get-client-status":
+        response= get_client_status()
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} set client info failed!")
+        if not os.path.exists("client-status"):
+            os.makedirs("client-status")
+        UTILITY.save_json_file(f"client-status/{datetime.now().__str__()}.json", response)
+        logger.info(f"Get client status: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "get-client-log":
+        response= get_client_log()
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} set client log failed!")
+        if not os.path.exists("client-log"):
+            os.makedirs("client-log")
+        UTILITY.save_json_file(f"client-log/{datetime.now().__str__()}.json", response)
+        logger.info(f"Get client log: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "open-info-window":
+        window_id = int(args[1])
+        window_info = UTILITY.read_json_file("window.json")["res"]
+        response = open_info_window(window_info["title"], window_info["content"], window_id)
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} open window failed!")
+        logger.info(f"Open info window: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "close-info-window":
+        window_id = int(args[1])
+        response = close_info_window(window_id)
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} open window failed!")
+        logger.info(f"Close info window: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "run-command":
+        command_info = UTILITY.read_json_file("command.json")["res"]
+        response= run_command(command_info["command"])
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]-client["user_ip"]} run command failed!")
+        UTILITY.save_json_file(f"command-log.json", response)
+        logger.info(f"Run command: Success {success}, Fail {fail}, total {success + fail}")
+if __name__ == "__main__":
+    main()
 
 
