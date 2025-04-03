@@ -39,13 +39,14 @@ class APIClient:
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
         return response.json()
 
-    def handle_info(self, action, title = None, content = None, window_id = None):
+    def handle_info(self, action, title = None, content = None, window_id = None, front_size=16):
         url = f"{self.base_url}/client/info"
         payload = {
             "action": action,
             "title": title,
             "content": content,
-            "window_id": window_id
+            "window_id": window_id,
+            "front_size": front_size
         }
         logger.info(f"Window {window_id} {action}, {self.base_url}/client/info")
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))

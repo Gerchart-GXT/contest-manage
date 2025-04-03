@@ -12,7 +12,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOM_ID = "101"
-IP_RANGE = "10.0.0.23-23"
+IP_RANGE = "10.0.0.25-25"
 CLIENT_EXCEL_PATH = "client.xlsx"
 CLIENT_EXCEL_TITLE = {
     "user_id": "考生准考证号", 
@@ -201,13 +201,13 @@ def get_client_log():
             logger.error(f"Get client logs {client["user_ip"]} {client["user_name"]} Failed!")
     return client_log
 
-def open_info_window(title, content, window_id):
+def open_info_window(title, content, window_id, front_size):
     global CLIENT_DATA
     window_status = []
     for client in CLIENT_DATA:
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.handle_info("on", title, content, window_id)
+        response = client_connect.handle_info("on", title, content, window_id, front_size)
         window_status.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Open info window {client["user_ip"]}  {client["user_name"]} successfully!")
@@ -305,7 +305,7 @@ def main():
     elif args[0] == "open-info-window":
         window_id = int(args[1])
         window_info = UTILITY.read_json_file("window.json")["res"]
-        response = open_info_window(window_info["title"], window_info["content"], window_id)
+        response = open_info_window(window_info["title"], window_info["content"], window_id, window_info["front_size"])
         success = 0
         fail = 0
         for client, res in response:

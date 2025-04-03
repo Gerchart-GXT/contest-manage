@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime
 import subprocess
 import threading
@@ -12,8 +13,11 @@ from PyQt5.QtCore import QTimer, QObject, pyqtSignal
 from logger import logger 
 
 flask_app = Flask(__name__)
+CORS(flask_app)
+
 qt_app = QApplication(sys.argv)
 qt_app.setQuitOnLastWindowClosed(False)
+
 UTILITY = None
 API_KEY = ""
 USER_DATA = None
@@ -64,6 +68,7 @@ def validate_request(required_fields):
 @flask_app.route('/client/user', methods=['POST'])
 @validate_request(['action', 'user_data'])
 def handle_user(data):
+    global USER_DATA
     if data['action'] != 'USERSET':
         logger.error("Invalid action")
         return jsonify({"status": "error", "mesg": "Invalid action"}), 400
@@ -156,7 +161,7 @@ def handle_info(data):
         return jsonify({"status": "error", "mesg": "Invalid action"}), 400
     window_id = data["window_id"]
     # 将 GUI 操作放入队列，由主线程处理
-    GUI_QUEUE.put((action, window_id, data["title"], data["content"]))
+    GUI_QUEUE.put((action, window_id, data["title"], data["content"], data["front_size"]))
     logger.info(f"Request to {action} window {window_id} received.")
     return {
         "status": "success",
@@ -211,12 +216,12 @@ class GuiHandler(QObject):
         在主线程中处理 GUI 操作。
         """
         while not GUI_QUEUE.empty():
-            action, window_id, title, content = GUI_QUEUE.get()
+            action, window_id, title, content, front_size = GUI_QUEUE.get()
             if action == "on":
                 if (window_id in WINDOWS) and WINDOWS[window_id].is_open():
                     logger.warning(f"Window {window_id} is already open!")
                 else:
-                    now_window = InfoWindow(title, content)
+                    now_window = InfoWindow(title, content, front_size)
                     now_window.show()
                     WINDOWS[window_id] = now_window
                     logger.info(f"Window {window_id} opened!")
