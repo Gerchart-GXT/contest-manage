@@ -78,9 +78,9 @@ def handle_user(data):
     # 存储用户信息
     with USER_DATA_FILE_LOCK:
         _ = UTILITY.save_json_file("./user-info.json", user)
-    
     if _["status"] == "success":
         logger.info(f"User info saved successfully: {user}")
+        USER_DATA = user
         return jsonify({
             "status": "success",
             "mesg": _["mesg"],
@@ -97,11 +97,11 @@ def handle_user(data):
 
 # 状态获取接口
 @flask_app.route('/client/status', methods=['POST'])
-@validate_request(['action', 'user_id'])
+@validate_request(['action'])
 def get_status(data):
     global USER_DATA
     global UTILITY
-    if data['action'] != 'STATUSGET':
+    if data['action'] != 'GET':
         logger.error("Invalid action")
         return jsonify({"status": "error", "mesg": "Invalid action"}), 400
     
@@ -117,7 +117,7 @@ def get_status(data):
         "user_data": user,
         "metadata": {
             "timestamp": datetime.now().isoformat(),
-            "active_progress": UTILITY.get_active_progress()  # 可扩展添加实际进度信息
+            "active_progress": UTILITY.get_active_progress() 
         }
     })
 
@@ -242,7 +242,7 @@ if __name__ == '__main__':
             USER_DATA = _["res"]
     
     # 启动 Flask 服务器
-    flask_thread = threading.Thread(target=flask_app.run, kwargs={'host': '0.0.0.0', 'port': 8080}, daemon=True)
+    flask_thread = threading.Thread(target=flask_app.run, kwargs={'host': '0.0.0.0', 'port': 8088}, daemon=True)
     flask_thread.start()
     
     # 在主线程中启动 GUI 事件处理器
