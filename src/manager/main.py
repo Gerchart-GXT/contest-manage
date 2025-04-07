@@ -33,33 +33,26 @@ def read_client_excel():
     global CLIENT_DATA
     global CLIENT_EXCEL_PATH
     global CLIENT_EXCEL_TITLE
-
     try:
-        # 读取 Excel 文件
         df = pd.read_excel(CLIENT_EXCEL_PATH)
-
-        # 检查表头是否包含所有必需的字段
         required_columns = list(CLIENT_EXCEL_TITLE.values())
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"Excel 文件缺少以下必需字段: {missing_columns}")
-
-        # 将数据转换为 CLIENT_EXCEL_TITLE 的格式
         for _, row in df.iterrows():
             client_info = {
                 key: row[alias] for key, alias in CLIENT_EXCEL_TITLE.items()
             }
             CLIENT_DATA.append(client_info)
         logger.info(f"Read client Excel {CLIENT_EXCEL_PATH} successfully!")
+    except FileNotFoundError:
+        logger.error(f"File {CLIENT_EXCEL_PATH} not exist!")
+    except PermissionError:
+        logger.error(f"Have no permission to read {CLIENT_EXCEL_PATH}！")
     except Exception as e:
-        logger.error(f"Read client Excel {CLIENT_EXCEL_PATH} error: {e}")
+        logger.error(f"Reading {CLIENT_EXCEL_PATH} ERROR: {e}")
 
 def write_client_excel():
-    """
-    将处理后的考生数据写回 Excel 文件。
-    :param client_data: 处理后的考生数据列表
-    :param output_file: 输出的 Excel 文件路径
-    """
     global CLIENT_EXCEL_PATH
     global CLIENT_DATA
     global CLIENT_EXCEL_TITLE
@@ -75,18 +68,17 @@ def write_client_excel():
     logger.info(f"Save client Excel {CLIENT_EXCEL_PATH} successfully!")
 
 def parse_ip_range(ip_range):
-    """
-    解析 IP 范围，生成所有需要测试的 IP 地址。
-    """
-    match = re.match(r"(\d+\.\d+\.\d+\.)(\d+)-(\d+)", ip_range)
-    if not match:
-        raise ValueError("IP 范围格式不正确，应为 '192.168.0.1-100' 格式")
-
-    base_ip, start, end = match.groups()
-    start = int(start)
-    end = int(end)
-
-    return [f"{base_ip}{i}" for i in range(start, end + 1)]
+    try:
+        match = re.match(r"(\d+\.\d+\.\d+\.)(\d+)-(\d+)", ip_range)
+        if not match:
+            raise ValueError("IP range ERROR: it should be like '192.168.0.1-100' ")
+        base_ip, start, end = match.groups()
+        start = int(start)
+        end = int(end)
+        return [f"{base_ip}{i}" for i in range(start, end + 1)]
+    except ValueError as e:
+        logger.error(f"IP Parsing failed : {e}")
+        return []
 
 def ping_test(max_workers=50):
     """
@@ -135,6 +127,21 @@ def ping_test(max_workers=50):
     logger.info(f"Available ip count: {len(available_ips)}")
 
     return sorted(available_ips, key=lambda ip: tuple(map(int, ip.split('.'))))
+
+def connect_to_client():
+    global CLIENT_DATA
+    client_response = []
+    for client in CLIENT_DATA:
+        api_key = generate_api_key(client["user_ip"])
+        client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+        response = client_connect.connect_check()
+        if(response["status"] == "success"):
+            logger.info(f"Connect to  {client["user_ip"]} {client["user_name"]} successfully!")
+            client_response.append((client, response))
+        else:
+            logger.error(f"Fail to connect{client["user_ip"]} {client["user_name"]}!")
+            client_response.append((client, response))
+    return client_response
 
 def map_client_to_ip(available_ips):
     """
@@ -255,14 +262,17 @@ def main():
         a_ips_p = 0
         connect = 0
         disconnect = 0
-        for ip in total_ips:
-            if available_ips[a_ips_p] == ip:
-                connect += 1
-                a_ips_p += 1
-            else :
-                disconnect += 1
-                logger.warning(f"{ip} is lost")
+        if len(available_ips) > 0:
+            for ip in total_ips:
+                if available_ips[a_ips_p] == ip:
+                    connect += 1
+                    a_ips_p += 1
+                else :
+                    disconnect += 1
+                    logger.warning(f"{ip} is lost")
         logger.info(f"Ping: Available {connect}, loss {disconnect}, total {connect + disconnect}")
+    elif args[0] == "connect-check":
+
     elif args[0] == "set-client-info":
         response= set_client_info()
         success = 0
@@ -272,7 +282,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} set client info failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
         logger.info(f"Set client info: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "get-client-status":
         response= get_client_status()
@@ -283,7 +293,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} set client info failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
         if not os.path.exists("client-status"):
             os.makedirs("client-status")
         UTILITY.save_json_file(f"client-status/{datetime.now().__str__()}.json", response)
@@ -297,7 +307,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} set client log failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client log failed!")
         if not os.path.exists("client-log"):
             os.makedirs("client-log")
         UTILITY.save_json_file(f"client-log/{datetime.now().__str__()}.json", response)
@@ -313,7 +323,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} open window failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} open window failed!")
         logger.info(f"Open info window: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "close-info-window":
         window_id = int(args[1])
@@ -325,7 +335,7 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} open window failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} open window failed!")
         logger.info(f"Close info window: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "run-command":
         command_info = UTILITY.read_json_file("command.json")["res"]
@@ -337,9 +347,11 @@ def main():
                 success += 1
             else:
                 fail += 1
-                logger.warning(f"{client["user_name"]-client["user_ip"]} run command failed!")
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} run command failed!")
         UTILITY.save_json_file(f"command-log.json", response)
         logger.info(f"Run command: Success {success}, Fail {fail}, total {success + fail}")
+    else:
+        logger.error(f"Command Error: {args}")
 if __name__ == "__main__":
     main()
 

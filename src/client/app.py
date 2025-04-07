@@ -64,6 +64,23 @@ def validate_request(required_fields):
         return wrapper
     return decorator
 
+@flask_app.route('/client/connect', methods=['POST'])
+@validate_request(['action'])
+def handle_user(data):
+    global USER_DATA
+    global API_KEY
+    if data['action'] != 'CHECK':
+        logger.error("Invalid action")
+        return jsonify({"status": "error", "mesg": "Invalid action"}), 400
+    
+    return jsonify({
+        "status": "success",
+        "mesg": "Connect successfully",
+        "user_data": USER_DATA,
+        "api_key": API_KEY
+    })
+
+
 # 用户信息设置接口
 @flask_app.route('/client/user', methods=['POST'])
 @validate_request(['action', 'user_data'])
@@ -245,7 +262,7 @@ if __name__ == '__main__':
     # 启动 Flask 服务器
     flask_thread = threading.Thread(target=flask_app.run, kwargs={'host': '0.0.0.0', 'port': 8088}, daemon=True)
     flask_thread.start()
-    
+    logger.info("Flask server start!")
     # 在主线程中启动 GUI 事件处理器
     gui_handler = GuiHandler()
     
