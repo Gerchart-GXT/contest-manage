@@ -12,8 +12,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOM_ID = "101"
-IP_RANGE = "10.0.0.23-23"
-CLIENT_EXCEL_PATH = "client.xlsx"
+IP_RANGE = "10.0.0.23-25"
+CLIENT_EXCEL_PATH = "./client.xlsx"
 CLIENT_EXCEL_TITLE = {
     "user_id": "考生准考证号", 
     "user_name": "考生姓名",
@@ -66,6 +66,14 @@ def write_client_excel():
     # 将 DataFrame 写入 Excel 文件
     df.to_excel(CLIENT_EXCEL_PATH, index=False)
     logger.info(f"Save client Excel {CLIENT_EXCEL_PATH} successfully!")
+
+def is_valid_ipv4(ip):
+    pattern = r'^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$'
+
+    if re.match(pattern, str(ip)):
+        return True
+    else:
+        return False
 
 def parse_ip_range(ip_range):
     try:
@@ -154,6 +162,13 @@ def connect_to_client():
     global CLIENT_DATA
     client_response = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            client_response.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.connect_check()
@@ -169,21 +184,34 @@ def set_client_info():
     global CLIENT_DATA
     client_response = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            client_response.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.set_user(client)
+        client_response.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Set client info {client["user_ip"]} to {client["user_name"]} successfully!")
-            client_response.append((client, response))
         else:
             logger.error(f"Set client info {client["user_ip"]} to {client["user_name"]} Failed!")
-            client_response.append((client, response))
     return client_response
 
 def get_client_status():
     global CLIENT_DATA
     client_status = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            client_status.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.get_status()
@@ -198,6 +226,13 @@ def get_client_log():
     global CLIENT_DATA
     client_log = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            client_log.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.get_log()
@@ -212,6 +247,13 @@ def open_info_window(title, content, window_id, front_size):
     global CLIENT_DATA
     window_status = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            window_status.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("on", title, eval(content), window_id, front_size)
@@ -226,6 +268,13 @@ def close_info_window(window_id):
     global CLIENT_DATA
     window_status = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            window_status.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("off", window_id=window_id)
@@ -240,6 +289,13 @@ def run_command(command):
     global CLIENT_DATA
     command_return = []
     for client in CLIENT_DATA:
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            command_return.append((client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            }))
+            continue
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.execute_command(command)

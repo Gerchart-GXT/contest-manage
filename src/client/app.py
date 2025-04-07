@@ -103,7 +103,7 @@ def handle_user(data):
     if _["status"] == "success":
         logger.info(f"User info saved successfully: {user}")
         USER_DATA = user
-        return jsonify({
+        return jsonify( {
             "status": "success",
             "mesg": _["mesg"],
             "user_id": user['user_id'],
@@ -191,12 +191,12 @@ def handle_info(data):
 def execute_command(data):
     if data['action'] != 'run':
         logger.error("Invalid action")
-        return jsonify({"status": "error", "error": "Invalid action"}), 400
+        return jsonify({"status": "error", "mesg": "Invalid action"}), 400
     
     command = data['content']
     if not command:
         logger.error("Empty command")
-        return jsonify({"status": "error", "error": "Empty command"}), 400
+        return jsonify({"status": "error", "mesg": "Empty command"}), 400
     
     try:
         with COMMAND_LOCK:
@@ -207,15 +207,21 @@ def execute_command(data):
                 text=True,
                 timeout=30
             )
+            output = f"STDOUT: {result.stdout} \nSTDERR: {result.stderr}"
+            logger.info(f"Command executed successfully: {output}")
+            return jsonify({
+                "status": "success",
+                "mesg": output
+            })
     except subprocess.TimeoutExpired:
         logger.error("Command timeout")
-        return jsonify({"status": "error", "error": "Command timeout"}), 408
+        return jsonify({"status": "error", "mesg": "Command timeout"}), 408
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed with return code {e.returncode}: {e.stderr}")
-        return jsonify({"status": "error", "error": f"Command failed: {e.stderr}"}), 500
+        return jsonify({"status": "error", "mesg": f"Command failed: {e.stderr}"}), 500
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "mesg": str(e)}), 500
 
 class GuiHandler(QObject):
     def __init__(self):

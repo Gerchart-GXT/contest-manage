@@ -15,16 +15,14 @@ class InfoWindow:
     def _create_window(self):
         try:
             # 创建 Qt 主窗口
-            self.window = QMainWindow()
+            self.window = CustomMainWindow(self)  # 使用自定义的 QMainWindow
             self.window.setWindowTitle(self.title)
             self.window.setGeometry(100, 100, 800, 600)
             self.window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
             self.window.activateWindow()
             self.window.raise_()
-
             # 使用 QWebEngineView 渲染 HTML
             self.browser = QWebEngineView()
-
             # 在 HTML 中添加 CSS 样式，动态调整字体大小
             styled_content = f"""
             <!DOCTYPE html>
@@ -46,7 +44,6 @@ class InfoWindow:
             """
             self.browser.setHtml(styled_content)
             self.window.setCentralWidget(self.browser)
-
             # 默认最大化窗口
             self.window.showMaximized()
             logger.info(f"Window '{self.title}' created successfully.")
@@ -67,9 +64,10 @@ class InfoWindow:
     def close(self):
         try:
             if self.window is not None:
+                self.window.request_close = True  # 标记为请求关闭
                 self.window.close()
                 self.window = None
-                logger.info(f"Window '{self.title}' closed successfully.")
+                logger.info(f"Window '{self.title}' closed via request.")
             else:
                 logger.warning(f"Window '{self.title}' is not initialized and cannot be closed.")
         except Exception as e:
@@ -81,3 +79,20 @@ class InfoWindow:
         except Exception as e:
             logger.error(f"Failed to check if window '{self.title}' is open: {str(e)}")
             return False
+
+class CustomMainWindow(QMainWindow):
+    def __init__(self, info_window):
+        super().__init__()
+        self.info_window = info_window
+        self.request_close = False  # 标志位，用于区分请求关闭和手动关闭
+
+    def closeEvent(self, event):
+        if self.request_close:
+            # 如果是请求关闭
+            logger.info(f"Window '{self.info_window.title}' closed via request.")
+        else:
+            # 如果是手动关闭
+            logger.info(f"Window '{self.info_window.title}' closed manually by user.")
+        # 清理 info_window 中的 window 对象
+        self.info_window.window = None
+        event.accept()
