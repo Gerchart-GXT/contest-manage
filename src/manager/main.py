@@ -158,152 +158,315 @@ def map_client_to_ip(available_ips):
         logger.info(f"Mapping {client["user_name"]}({client["user_id"]}) to {client["user_ip"]}")
     return CLIENT_DATA
     
-def connect_to_client():
+def connect_to_client(max_workers=50):
     global CLIENT_DATA
     client_response = []
-    for client in CLIENT_DATA:
+
+    def connect_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            client_response.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.connect_check()
         if(response["status"] == "success"):
             logger.info(f"Connect to {client["user_ip"]} {client["user_name"]} successfully!")
-            client_response.append((client, response))
         else:
             logger.error(f"Fail to connect{client["user_ip"]} {client["user_name"]}!")
-            client_response.append((client, response))
+        return (client, response)
+        
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(connect_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                client_response.append(result)
+
+    # for client in CLIENT_DATA:
+    #     if not is_valid_ipv4(client["user_ip"]):
+    #         logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+    #         client_response.append((client, {
+    #             "status": "error",
+    #             "mesg": "IP format ERROR"
+    #         }))
+    #         continue
+    #     api_key = generate_api_key(client["user_ip"])
+    #     client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+    #     response = client_connect.connect_check()
+    #     if(response["status"] == "success"):
+    #         logger.info(f"Connect to {client["user_ip"]} {client["user_name"]} successfully!")
+    #         client_response.append((client, response))
+    #     else:
+    #         logger.error(f"Fail to connect{client["user_ip"]} {client["user_name"]}!")
+    #         client_response.append((client, response))
     return client_response
  
-def set_client_info():
+def set_client_info(max_workers=50):
     global CLIENT_DATA
     client_response = []
-    for client in CLIENT_DATA:
+    
+    def set_ont(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            client_response.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.set_user(client)
-        client_response.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Set client info {client["user_ip"]} to {client["user_name"]} successfully!")
         else:
             logger.error(f"Set client info {client["user_ip"]} to {client["user_name"]} Failed!")
+        return (client, response)
+        
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(set_ont, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                client_response.append(result)
+    # for client in CLIENT_DATA:
+    #     if not is_valid_ipv4(client["user_ip"]):
+    #         logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+    #         client_response.append((client, {
+    #             "status": "error",
+    #             "mesg": "IP format ERROR"
+    #         }))
+    #         continue
+    #     api_key = generate_api_key(client["user_ip"])
+    #     client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+    #     response = client_connect.set_user(client)
+    #     client_response.append((client, response))
+    #     if(response["status"] == "success"):
+    #         logger.info(f"Set client info {client["user_ip"]} to {client["user_name"]} successfully!")
+    #     else:
+    #         logger.error(f"Set client info {client["user_ip"]} to {client["user_name"]} Failed!")
     return client_response
 
-def get_client_status():
+def get_client_status(max_workers=50):
     global CLIENT_DATA
     client_status = []
-    for client in CLIENT_DATA:
+
+    def get_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            client_status.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.get_status()
-        client_status.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Get client status {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
             logger.error(f"Get client status {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(get_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                client_status.append(result)
+    # for client in CLIENT_DATA:
+        # if not is_valid_ipv4(client["user_ip"]):
+        #     logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+        #     client_status.append((client, {
+        #         "status": "error",
+        #         "mesg": "IP format ERROR"
+        #     }))
+        #     continue
+        # api_key = generate_api_key(client["user_ip"])
+        # client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+        # response = client_connect.get_status()
+        # client_status.append((client, response))
+        # if(response["status"] == "success"):
+        #     logger.info(f"Get client status {client["user_ip"]}  {client["user_name"]} successfully!")
+        # else:
+        #     logger.error(f"Get client status {client["user_ip"]} {client["user_name"]} Failed!")
     return client_status
 
-def get_client_log():
+def get_client_log(max_workers=50):
     global CLIENT_DATA
     client_log = []
-    for client in CLIENT_DATA:
+    
+    def get_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            client_log.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.get_log()
-        client_log.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Get client logs {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
             logger.error(f"Get client logs {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as excutor:
+        futures = {excutor.submit(get_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                client_log.append(result)
+    # for client in CLIENT_DATA: 
+        # if not is_valid_ipv4(client["user_ip"]):
+        #     logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+        #     client_log.append((client, {
+        #         "status": "error",
+        #         "mesg": "IP format ERROR"
+        #     }))
+        #     continue
+        # api_key = generate_api_key(client["user_ip"])
+        # client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+        # response = client_connect.get_log()
+        # client_log.append((client, response))
+        # if(response["status"] == "success"):
+        #     logger.info(f"Get client logs {client["user_ip"]}  {client["user_name"]} successfully!")
+        # else:
+        #     logger.error(f"Get client logs {client["user_ip"]} {client["user_name"]} Failed!")
     return client_log
 
-def open_info_window(title, content, window_id, front_size):
+def open_info_window(title, content, window_id, front_size, max_workers=50):
     global CLIENT_DATA
     window_status = []
-    for client in CLIENT_DATA:
+
+    def open_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            window_status.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("on", title, eval(content), window_id, front_size)
-        window_status.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Open info window {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
             logger.error(f"Open info window {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(open_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                window_status.append(result)
+    # for client in CLIENT_DATA:
+    #     if not is_valid_ipv4(client["user_ip"]):
+    #         logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+    #         window_status.append((client, {
+    #             "status": "error",
+    #             "mesg": "IP format ERROR"
+    #         }))
+    #         continue
+    #     api_key = generate_api_key(client["user_ip"])
+    #     client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+    #     response = client_connect.handle_info("on", title, eval(content), window_id, front_size)
+    #     window_status.append((client, response))
+    #     if(response["status"] == "success"):
+    #         logger.info(f"Open info window {client["user_ip"]}  {client["user_name"]} successfully!")
+    #     else:
+    #         logger.error(f"Open info window {client["user_ip"]} {client["user_name"]} Failed!")
     return window_status
 
-def close_info_window(window_id):
+def close_info_window(window_id, max_workers=50):
     global CLIENT_DATA
     window_status = []
-    for client in CLIENT_DATA:
+
+    def close_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            window_status.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.handle_info("off", window_id=window_id)
-        window_status.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Close info window {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
             logger.error(f"Close info window {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(close_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                window_status.append(result)
+    
+    # for client in CLIENT_DATA:
+    #     if not is_valid_ipv4(client["user_ip"]):
+    #         logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+    #         window_status.append((client, {
+    #             "status": "error",
+    #             "mesg": "IP format ERROR"
+    #         }))
+    #         continue
+    #     api_key = generate_api_key(client["user_ip"])
+    #     client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+    #     response = client_connect.handle_info("off", window_id=window_id)
+    #     window_status.append((client, response))
+    #     if(response["status"] == "success"):
+    #         logger.info(f"Close info window {client["user_ip"]}  {client["user_name"]} successfully!")
+    #     else:
+    #         logger.error(f"Close info window {client["user_ip"]} {client["user_name"]} Failed!")
     return window_status
 
-def run_command(command):
+def run_command(command, max_workers=50):
     global CLIENT_DATA
     command_return = []
-    for client in CLIENT_DATA:
+
+    def run_one(client):
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
-            command_return.append((client, {
+            return (client, {
                 "status": "error",
                 "mesg": "IP format ERROR"
-            }))
-            continue
+            })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
         response = client_connect.execute_command(command)
-        command_return.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
             logger.error(f"Run command {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(run_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                command_return.append(result)
+    # for client in CLIENT_DATA:
+    #     if not is_valid_ipv4(client["user_ip"]):
+    #         logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+    #         command_return.append((client, {
+    #             "status": "error",
+    #             "mesg": "IP format ERROR"
+    #         }))
+    #         continue
+    #     api_key = generate_api_key(client["user_ip"])
+    #     client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+    #     response = client_connect.execute_command(command)
+    #     command_return.append((client, response))
+    #     if(response["status"] == "success"):
+    #         logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
+    #     else:
+    #         logger.error(f"Run command {client["user_ip"]} {client["user_name"]} Failed!")
     return command_return
 
 def main():
@@ -320,7 +483,7 @@ def main():
         disconnect = 0
         if len(available_ips) > 0:
             for ip in total_ips:
-                if available_ips[a_ips_p] == ip:
+                if a_ips_p < len(available_ips) and available_ips[a_ips_p] == ip:
                     connect += 1
                     a_ips_p += 1
                 else :
@@ -345,6 +508,7 @@ def main():
         for client, res in response:
             if res["status"] == "success":
                 success += 1
+                print(client)
             else:
                 fail += 1
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
@@ -361,7 +525,7 @@ def main():
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
         if not os.path.exists("client-status"):
             os.makedirs("client-status")
-        UTILITY.save_json_file(f"client-status/{datetime.now().__str__()}.json", response)
+        UTILITY.save_json_file(f"client-status/{datetime.now().strftime("%y-%m-%d-%H:%M:%S")}.json", response)
         logger.info(f"Get client status: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "get-client-log":
         response= get_client_log()
@@ -375,7 +539,7 @@ def main():
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client log failed!")
         if not os.path.exists("client-log"):
             os.makedirs("client-log")
-        UTILITY.save_json_file(f"client-log/{datetime.now().__str__()}.json", response)
+        UTILITY.save_json_file(f"client-log/{datetime.now().strftime("%y-%m-%d-%H:%M:%S")}.json", response)
         logger.info(f"Get client log: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "open-info-window":
         window_id = int(args[1])
