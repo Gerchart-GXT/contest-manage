@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOM_ID = "101"
 IP_RANGE = "10.0.0.23-25"
+LOCAL_IP = ""
 CLIENT_EXCEL_PATH = "./client.xlsx"
 CLIENT_EXCEL_TITLE = {
     "user_id": "考生准考证号", 
@@ -23,6 +24,7 @@ CLIENT_EXCEL_TITLE = {
     "exam_id": "考试编号"
 }
 CLIENT_DATA = []
+REG_FILTER = None
 
 UTILITY = Utility()
 def generate_api_key(ip):
@@ -95,6 +97,7 @@ def ping_test(max_workers=50):
     :return: 可用的 IP 地址列表
     """
     global IP_RANGE
+    global REG_FILTER
 
     def ping_ip(ip):
         """
@@ -123,6 +126,8 @@ def ping_test(max_workers=50):
 
     # 解析 IP 范围
     ip_list = parse_ip_range(IP_RANGE)
+    if REG_FILTER["active"]:
+        ip_list = [ip for ip in ip_list if re.match(REG_FILTER["ip"]["reg"], str(ip))]
     logger.info(f"Ping test for {IP_RANGE}")
     # 使用多线程并发 Ping
     available_ips = []
@@ -146,9 +151,19 @@ def map_client_to_ip(available_ips):
     global ROOM_ID
     global CLIENT_DATA
     # 遍历考生数据，分配 IP 地址
-    logger.info(f"Client count {len(CLIENT_DATA)}")
+    client_cnt = 0
     for i, client in enumerate(CLIENT_DATA):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                continue
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                continue
+            if not re.match(REG_FILTER["ip"]["reg"], str(available_ips[i])):
+                continue
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                continue
         # 添加 user_room 字段
+        client_cnt += 1
         client["user_room"] = ROOM_ID
         # 添加 user_ip 字段
         if i < len(available_ips):
@@ -156,13 +171,40 @@ def map_client_to_ip(available_ips):
         else:
             client["user_ip"] = None  # 如果 IP 地址不足，设置为 None
         logger.info(f"Mapping {client["user_name"]}({client["user_id"]}) to {client["user_ip"]}")
+    logger.info(f"Client count {client_cnt}")
     return CLIENT_DATA
     
 def connect_to_client(max_workers=50):
     global CLIENT_DATA
+    global REG_FILTER
     client_response = []
 
     def connect_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -209,6 +251,31 @@ def set_client_info(max_workers=50):
     client_response = []
     
     def set_ont(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -253,6 +320,31 @@ def get_client_status(max_workers=50):
     client_status = []
 
     def get_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -297,6 +389,31 @@ def get_client_log(max_workers=50):
     client_log = []
     
     def get_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -341,6 +458,31 @@ def open_info_window(title, content, window_id, front_size, max_workers=50):
     window_status = []
 
     def open_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -385,6 +527,31 @@ def close_info_window(window_id, max_workers=50):
     window_status = []
 
     def close_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -430,6 +597,31 @@ def run_command(command, max_workers=50):
     command_return = []
 
     def run_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
         if not is_valid_ipv4(client["user_ip"]):
             logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
             return (client, {
@@ -471,6 +663,8 @@ def run_command(command, max_workers=50):
 
 def main():
     read_client_excel()
+    global REG_FILTER
+    REG_FILTER = UTILITY.read_json_file("filter.json")["res"]
     args = sys.argv[1:]
     if args[0] == "update-client-list":
         map_client_to_ip(ping_test())
@@ -508,7 +702,6 @@ def main():
         for client, res in response:
             if res["status"] == "success":
                 success += 1
-                print(client)
             else:
                 fail += 1
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
