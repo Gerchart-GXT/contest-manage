@@ -12,7 +12,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOM_ID = "101"
-IP_RANGE = "10.0.0.25-25"
+IP_RANGE = "10.0.0.23-23"
 CLIENT_EXCEL_PATH = "client.xlsx"
 CLIENT_EXCEL_TITLE = {
     "user_id": "考生准考证号", 

@@ -136,7 +136,7 @@ def get_log(data):
     log_file_path = 'logs/app.log'  # 日志文件路径
     try:
         with open(log_file_path, 'r') as log_file:
-            log_content = log_file.read()
+            log_content = log_file.readlines()[-100:] 
         logger.info("Log file retrieved successfully")
         return jsonify({
             "status": "success",
@@ -182,24 +182,20 @@ def execute_command(data):
         return jsonify({"status": "error", "error": "Empty command"}), 400
     
     try:
-        with COMMAND_LOCK:  # 保证命令串行执行
+        with COMMAND_LOCK:
             result = subprocess.run(
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30  # 30秒超时
+                timeout=30
             )
-            
-            output = f"STDOUT: {result.stdout} \nSTDERR: {result.stderr}"
-            logger.info(f"Command executed successfully: {output}")
-            return jsonify({
-                "status": "success",
-                "mesg": output
-            })
     except subprocess.TimeoutExpired:
         logger.error("Command timeout")
         return jsonify({"status": "error", "error": "Command timeout"}), 408
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command failed with return code {e.returncode}: {e.stderr}")
+        return jsonify({"status": "error", "error": f"Command failed: {e.stderr}"}), 500
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
         return jsonify({"status": "error", "error": str(e)}), 500
