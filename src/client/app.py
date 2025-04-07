@@ -66,7 +66,7 @@ def validate_request(required_fields):
 
 @flask_app.route('/client/connect', methods=['POST'])
 @validate_request(['action'])
-def handle_user(data):
+def handle_connect(data):
     global USER_DATA
     global API_KEY
     if data['action'] != 'CHECK':

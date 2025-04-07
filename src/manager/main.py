@@ -128,21 +128,6 @@ def ping_test(max_workers=50):
 
     return sorted(available_ips, key=lambda ip: tuple(map(int, ip.split('.'))))
 
-def connect_to_client():
-    global CLIENT_DATA
-    client_response = []
-    for client in CLIENT_DATA:
-        api_key = generate_api_key(client["user_ip"])
-        client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.connect_check()
-        if(response["status"] == "success"):
-            logger.info(f"Connect to  {client["user_ip"]} {client["user_name"]} successfully!")
-            client_response.append((client, response))
-        else:
-            logger.error(f"Fail to connect{client["user_ip"]} {client["user_name"]}!")
-            client_response.append((client, response))
-    return client_response
-
 def map_client_to_ip(available_ips):
     """
     将可用的 IP 地址分配给考生，并为每个考生新增 user_room 和 user_ip 字段。
@@ -165,6 +150,21 @@ def map_client_to_ip(available_ips):
         logger.info(f"Mapping {client["user_name"]}({client["user_id"]}) to {client["user_ip"]}")
     return CLIENT_DATA
     
+def connect_to_client():
+    global CLIENT_DATA
+    client_response = []
+    for client in CLIENT_DATA:
+        api_key = generate_api_key(client["user_ip"])
+        client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+        response = client_connect.connect_check()
+        if(response["status"] == "success"):
+            logger.info(f"Connect to {client["user_ip"]} {client["user_name"]} successfully!")
+            client_response.append((client, response))
+        else:
+            logger.error(f"Fail to connect{client["user_ip"]} {client["user_name"]}!")
+            client_response.append((client, response))
+    return client_response
+ 
 def set_client_info():
     global CLIENT_DATA
     client_response = []
@@ -214,7 +214,7 @@ def open_info_window(title, content, window_id, front_size):
     for client in CLIENT_DATA:
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.handle_info("on", title, content, window_id, front_size)
+        response = client_connect.handle_info("on", title, eval(content), window_id, front_size)
         window_status.append((client, response))
         if(response["status"] == "success"):
             logger.info(f"Open info window {client["user_ip"]}  {client["user_name"]} successfully!")
@@ -272,7 +272,16 @@ def main():
                     logger.warning(f"{ip} is lost")
         logger.info(f"Ping: Available {connect}, loss {disconnect}, total {connect + disconnect}")
     elif args[0] == "connect-check":
-
+        response= connect_to_client()
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} connect failed!")
+        logger.info(f"Connect client info: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "set-client-info":
         response= set_client_info()
         success = 0
