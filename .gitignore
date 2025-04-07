@@ -88,9 +88,11 @@ ehthumbs.db
 Thumbs.db
 
 # Custom
-**/api-key.json
-**/user-info.json
-**/testapi.sh
+*.json
+*.sh
 **/logs/
+**/client-log/
+**/client-status/
 **/output/
 **/uploads/
+**/dist/
