@@ -1,0 +1,7 @@
+flask
+flask_cors
+request
+PyQt5 
+PyQtWebEngine
+pandas
+openpyxl
