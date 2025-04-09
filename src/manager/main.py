@@ -11,18 +11,11 @@ import re
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-ROOM_ID = "101"
-IP_RANGE = "10.0.0.23-25"
-LOCAL_IP = ""
-CLIENT_EXCEL_PATH = "./client.xlsx"
-CLIENT_EXCEL_TITLE = {
-    "user_id": "考生准考证号", 
-    "user_name": "考生姓名",
-    "user_room": "考生考场",
-    "user_ip": "考生机器IP",
-    "group_id": "组别",
-    "exam_id": "考试编号"
-}
+ROOM_ID = None
+IP_RANGE = None
+LOCAL_IP = None
+CLIENT_EXCEL_PATH = None
+CLIENT_EXCEL_TITLE = None
 CLIENT_DATA = []
 REG_FILTER = None
 
@@ -158,8 +151,9 @@ def map_client_to_ip(available_ips):
                 continue
             if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
                 continue
-            if not re.match(REG_FILTER["ip"]["reg"], str(available_ips[i])):
-                continue
+            if i < len(available_ips):
+                if not re.match(REG_FILTER["ip"]["reg"], str(available_ips[i])):
+                    continue
             if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
                 continue
         # 添加 user_room 字段
@@ -455,6 +449,7 @@ def get_client_log(max_workers=50):
 
 def open_info_window(title, content, window_id, front_size, max_workers=50):
     global CLIENT_DATA
+    global LOCAL_IP
     window_status = []
 
     def open_one(client):
@@ -662,9 +657,23 @@ def run_command(command, max_workers=50):
     return command_return
 
 def main():
-    read_client_excel()
+    global ROOM_ID
+    global IP_RANGE
+    global LOCAL_IP
+    global CLIENT_EXCEL_PATH
+    global CLIENT_EXCEL_TITLE
+    CONFIG = UTILITY.read_json_file("config.json")["res"]
+    ROOM_ID = CONFIG["ROOM_ID"]
+    IP_RANGE = CONFIG["IP_RANGE"]
+    LOCAL_IP = CONFIG["LOCAL_IP"]
+    CLIENT_EXCEL_PATH = CONFIG["CLIENT_EXCEL_PATH"]
+    CLIENT_EXCEL_TITLE = CONFIG["CLIENT_EXCEL_TITLE"]
+
     global REG_FILTER
     REG_FILTER = UTILITY.read_json_file("filter.json")["res"]
+
+    read_client_excel()
+
     args = sys.argv[1:]
     if args[0] == "update-client-list":
         map_client_to_ip(ping_test())

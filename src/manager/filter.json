@@ -1,0 +1,15 @@
+{
+    "active": true,
+    "ip": {
+        "reg": ""
+    },
+    "user_name":{
+        "reg": ""
+    },
+    "user_id": {
+        "reg": ""
+    },
+    "group_id": {
+        "reg": ""
+    }
+}

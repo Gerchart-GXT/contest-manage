@@ -96,3 +96,7 @@ Thumbs.db
 **/output/
 **/uploads/
 **/dist/
+!window.json
+!config.json
+!filter.json
+!command.json
