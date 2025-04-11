@@ -13,7 +13,7 @@ class APIClient:
 
     def _make_request(self, url, payload):
         try:
-            response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=5)
+            response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=30)
             response.raise_for_status()  # 检查HTTP状态码，如果不是200，抛出HTTPError
             return response.json()
         except requests.exceptions.RequestException as e:
