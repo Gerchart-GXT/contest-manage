@@ -1,3 +1,3 @@
 {
-    "command": "f'python --version\\n java -version \\n gcc --version \\n node -v'"
+    "command": "f'python --version && java -version && gcc --version && node -v'"
 }

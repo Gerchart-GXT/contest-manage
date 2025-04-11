@@ -1,12 +1,13 @@
 {
-    "ROOM_ID" : "致远楼503",
+    "ROOM_ID" : "test",
     "IP_RANGE" : "10.0.0.25-25",
-    "LOCAL_IP" : "192.168.137.200",
+    "LOCAL_IP" : "10.0.0.25",
     "CLIENT_EXCEL_PATH" : "./client.xlsx",
     "CLIENT_EXCEL_TITLE" : {
         "user_id": "准考证号", 
         "user_name": "学生姓名",
         "user_room": "考生考场",
+        "user_no": "考生机位号",
         "user_ip": "考生机器IP",
         "group_id": "参赛科目"
     }

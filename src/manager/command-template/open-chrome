@@ -1,3 +1,3 @@
 {
-    "command": "f'chrome.exe --new-window http://{LOCAL_IP}'"
+    "command": "f'start chrome.exe {LOCAL_IP}'"
 }

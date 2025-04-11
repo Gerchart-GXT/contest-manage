@@ -100,3 +100,4 @@ Thumbs.db
 !config.json
 !filter.json
 !command.json
+*.xlsx
