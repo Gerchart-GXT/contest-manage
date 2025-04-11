@@ -1,6 +1,6 @@
 {
     "ROOM_ID" : "致远楼503",
-    "IP_RANGE" : "192.168.137.1-150",
+    "IP_RANGE" : "10.0.0.25-25",
     "LOCAL_IP" : "192.168.137.200",
     "CLIENT_EXCEL_PATH" : "./client.xlsx",
     "CLIENT_EXCEL_TITLE" : {

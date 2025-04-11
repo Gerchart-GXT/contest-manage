@@ -589,6 +589,7 @@ def close_info_window(window_id, max_workers=50):
 
 def run_command(command, max_workers=50):
     global CLIENT_DATA
+    global LOCAL_IP
     command_return = []
 
     def run_one(client):
@@ -625,7 +626,7 @@ def run_command(command, max_workers=50):
             })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.execute_command(command)
+        response = client_connect.execute_command(eval(command))
         if(response["status"] == "success"):
             logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
