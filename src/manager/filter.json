@@ -1,9 +1,9 @@
 {
-    "active": true,
+    "active": false,
     "ip": {
         "reg": ""
     },
-    "user_name":{
+    "user_name": {
         "reg": ""
     },
     "user_id": {

@@ -3,10 +3,17 @@ import json
 import socket
 import hashlib
 from logger import logger 
+from runtime import get_runtime_root
 
 class Utility:
     def __init__(self):
         logger.info("Utility Init.")
+
+    def resolve_path(self, path):
+        if os.path.isabs(path):
+            return path
+        normalized = path[2:] if path.startswith("./") else path
+        return os.path.join(get_runtime_root(), normalized)
 
     def calculate_md5(self, input_string):
         md5_hash = hashlib.md5()
@@ -39,20 +46,22 @@ class Utility:
         return []
 
     def save_json_file(self, path, data):
-        logger.info(f"Save file to {path}")
+        real_path = self.resolve_path(path)
+        logger.info(f"Save file to {real_path}")
         try:
-            with open(path, "w", encoding='utf-8') as file:
+            os.makedirs(os.path.dirname(real_path), exist_ok=True)
+            with open(real_path, "w", encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
-            logger.info(f"Save file successfully : {path}")
+            logger.info(f"Save file successfully : {real_path}")
             return {
                 "status": "success",
-                "mesg": f"Save {path} successfully!"
+                "mesg": f"Save {real_path} successfully!"
             }
         except PermissionError:
-            logger.error(f"ERROR! Has NO permission to read {path}!")
+            logger.error(f"ERROR! Has NO permission to read {real_path}!")
             return {
                 "status": "erro",
-                "mesg": f"ERROR! Has NO permission to read {path}!"
+                "mesg": f"ERROR! Has NO permission to read {real_path}!"
             }
         except Exception as e:
             logger.error(f"File saving ERROR! Unkown {e}")
@@ -62,33 +71,34 @@ class Utility:
             }
     
     def read_json_file(self, path):
-        logger.info(f"Read file from {path}")
+        real_path = self.resolve_path(path)
+        logger.info(f"Read file from {real_path}")
         try:
-            with open(path, 'r', encoding='utf-8') as file:
+            with open(real_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-            logger.info(f"Read file successfully : {path}")
+            logger.info(f"Read file successfully : {real_path}")
             return {
                 "status": "success",
-                "mesg": f"Read {path} successfully!",
+                "mesg": f"Read {real_path} successfully!",
                 "res": data
             }
         except FileNotFoundError:
-            logger.error(f"ERROR! File {path} not exsist!")
+            logger.error(f"ERROR! File {real_path} not exsist!")
             return {
                 "status": "erro",
-                "mesg": f"ERROR! File {path} not exsist!"
+                "mesg": f"ERROR! File {real_path} not exsist!"
             }
         except json.JSONDecodeError:
-            logger.error(f"ERROR! File {path} is not Valid JSON format!")
+            logger.error(f"ERROR! File {real_path} is not Valid JSON format!")
             return {
                 "status": "erro",
-                "mesg": f"ERROR! File {path} is not Valid JSON format!"
+                "mesg": f"ERROR! File {real_path} is not Valid JSON format!"
             }
         except PermissionError:
-            logger.error(f"ERROR! Has NO permission to read {path}!")
+            logger.error(f"ERROR! Has NO permission to read {real_path}!")
             return {
                 "status": "erro",
-                "mesg": f"ERROR! Has NO permission to read {path}!"
+                "mesg": f"ERROR! Has NO permission to read {real_path}!"
             }
         except Exception as e:
             logger.error(f"File reading ERROR! Unkown {e}")

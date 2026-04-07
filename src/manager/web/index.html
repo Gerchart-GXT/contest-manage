@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contest Manager Panel</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Manager Console</p>
+                <h1>考试辅助程序管理面板——By Gerchart</h1>
+                <p class="hero-copy">本机页面，覆盖配置、名单导入、联通检查、批量命令和窗口控制。</p>
+                <div class="hero-meta">
+                    <span class="version-badge">V0.2</span>
+                    <a class="github-link" href="https://github.com/Gerchart-GXT/contest-manage" target="_blank" rel="noopener noreferrer">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.7 7.7 0 0 1 8 4.78c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+                        </svg>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+            <div class="hero-actions">
+                <button id="refresh-state-btn" class="ghost-button" type="button">刷新状态</button>
+                <span id="selection-summary" class="selection-summary">当前未选择，默认操作全部名单</span>
+            </div>
+        </header>
+
+        <main class="grid-layout">
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>基础配置</h2>
+                    <button id="save-settings-btn" type="button">保存配置</button>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>考场 ID</span>
+                        <input id="room-id" type="text">
+                    </label>
+                    <label>
+                        <span>IP 段</span>
+                        <input id="ip-range" type="text" placeholder="192.168.1.1-150">
+                    </label>
+                    <label>
+                        <span>本机 IP</span>
+                        <input id="local-ip" type="text" placeholder="192.168.1.10">
+                    </label>
+                    <label>
+                        <span>Excel 路径</span>
+                        <input id="client-excel-path" type="text">
+                    </label>
+                    <label>
+                        <span>准考证号列名</span>
+                        <input id="title-user-id" type="text">
+                    </label>
+                    <label>
+                        <span>姓名列名</span>
+                        <input id="title-user-name" type="text">
+                    </label>
+                    <label>
+                        <span>考场列名</span>
+                        <input id="title-user-room" type="text">
+                    </label>
+                    <label>
+                        <span>机位号列名</span>
+                        <input id="title-user-no" type="text">
+                    </label>
+                    <label>
+                        <span>IP 列名</span>
+                        <input id="title-user-ip" type="text">
+                    </label>
+                    <label>
+                        <span>组别列名</span>
+                        <input id="title-group-id" type="text">
+                    </label>
+                    <label>
+                        <span>考试编号列名</span>
+                        <input id="title-exam-id" type="text">
+                    </label>
+                </div>
+                <form id="upload-form" class="upload-row">
+                    <input id="xlsx-file" type="file" accept=".xlsx,.xls">
+                    <button type="submit">上传 XLSX</button>
+                    <button id="reload-clients-btn" class="ghost-button" type="button">重新读取名单</button>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>正则过滤</h2>
+                    <label class="toggle-row">
+                        <input id="filter-active" type="checkbox">
+                        <span>启用过滤</span>
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>IP 正则</span>
+                        <input id="filter-ip" type="text" placeholder="默认不限制">
+                    </label>
+                    <label>
+                        <span>姓名正则</span>
+                        <input id="filter-user-name" type="text" placeholder="默认不限制">
+                    </label>
+                    <label>
+                        <span>准考证号正则</span>
+                        <input id="filter-user-id" type="text" placeholder="默认不限制">
+                    </label>
+                    <label>
+                        <span>组别正则</span>
+                        <input id="filter-group-id" type="text" placeholder="默认不限制">
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel wide-panel">
+                <div class="panel-head">
+                    <h2>考生列表</h2>
+                    <div class="table-tools">
+                        <button id="select-all-btn" class="ghost-button" type="button">全选</button>
+                        <button id="clear-selection-btn" class="ghost-button" type="button">清空选择</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input id="master-checkbox" type="checkbox"></th>
+                                <th>姓名</th>
+                                <th>准考证号</th>
+                                <th>考场</th>
+                                <th>机位</th>
+                                <th>IP</th>
+                                <th>组别</th>
+                                <th>Ping</th>
+                                <th>Connect</th>
+                                <th>说明</th>
+                            </tr>
+                        </thead>
+                        <tbody id="client-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel wide-panel">
+                <div class="panel-head">
+                    <h2>场控操作</h2>
+                    <button id="usage-guide-btn" class="ghost-button" type="button">使用说明</button>
+                </div>
+                <div class="quick-actions">
+                    <button id="ping-btn" type="button">Ping</button>
+                    <button id="update-list-btn" type="button">更新绑定</button>
+                    <button id="connect-check-btn" type="button">Connect Check</button>
+                    <button id="set-client-info-btn" type="button">下发考生信息</button>
+                    <button id="get-client-status-btn" class="ghost-button" type="button">获取状态</button>
+                    <button id="get-client-log-btn" class="ghost-button" type="button">获取日志</button>
+                </div>
+                <div id="ping-summary" class="meta-box">尚未执行 Ping。</div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>批量命令</h2>
+                    <button id="use-command-template-btn" class="ghost-button" type="button">套用模板</button>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>命令模板</span>
+                        <select id="command-template-select"></select>
+                    </label>
+                    <label>
+                        <span>Command ID</span>
+                        <input id="command-id" type="text" placeholder="default">
+                    </label>
+                </div>
+                <label class="textarea-field">
+                    <span>命令内容</span>
+                    <textarea id="command-text" rows="7" placeholder="支持 f-string 模板，例如 f'ping {LOCAL_IP} -t 1'"></textarea>
+                </label>
+                <div class="quick-actions">
+                    <button id="run-command-btn" type="button">批量 Run Command</button>
+                    <button id="kill-command-btn" class="danger-button" type="button">批量 Kill Command</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>批量窗口</h2>
+                    <button id="use-window-template-btn" class="ghost-button" type="button">套用模板</button>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>窗口模板</span>
+                        <select id="window-template-select"></select>
+                    </label>
+                    <label>
+                        <span>Window ID</span>
+                        <input id="window-id" type="number" value="1">
+                    </label>
+                    <label>
+                        <span>标题</span>
+                        <input id="window-title" type="text">
+                    </label>
+                    <label>
+                        <span>字号</span>
+                        <input id="window-font-size" type="number" value="30">
+                    </label>
+                </div>
+                <label class="textarea-field">
+                    <span>窗口内容模板</span>
+                    <textarea id="window-content" rows="7" placeholder="支持 HTML/CSS/JS 和 f-string 模板"></textarea>
+                </label>
+                <div class="quick-actions">
+                    <button id="open-window-btn" type="button">批量 Open Window</button>
+                    <button id="close-window-btn" class="danger-button" type="button">批量 Close Window</button>
+                </div>
+            </section>
+
+            <section class="panel wide-panel">
+                <div class="panel-head">
+                    <h2>执行结果</h2>
+                </div>
+                <div class="task-layout">
+                    <aside class="task-sidebar">
+                        <div class="task-sidebar-head">
+                            <strong>任务列表</strong>
+                            <div class="task-sidebar-actions">
+                                <span id="task-summary-text" class="task-summary-text">暂无任务</span>
+                                <button id="clear-task-history-btn" class="ghost-button" type="button">清空历史</button>
+                            </div>
+                        </div>
+                        <div id="task-list" class="task-list">
+                            <div class="task-empty">等待操作...</div>
+                        </div>
+                    </aside>
+                    <section class="task-detail-panel">
+                        <div id="task-detail" class="task-detail-content">
+                            <div class="task-empty">当前没有任务，执行 Ping、Connect Check、批量命令或窗口操作后会显示在这里。</div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <section class="panel wide-panel">
+                <div class="panel-head">
+                    <h2>操作审计</h2>
+                </div>
+                <div id="audit-log-list" class="audit-log-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="readme-modal" class="modal-shell hidden">
+        <div class="modal-backdrop" data-close-readme="true"></div>
+        <div class="modal-card">
+            <div class="modal-head">
+                <div>
+                    <h2>使用说明</h2>
+                    <p id="readme-path" class="modal-subtitle"></p>
+                </div>
+                <button id="close-readme-btn" class="ghost-button" type="button">关闭</button>
+            </div>
+            <div id="readme-content" class="modal-content"></div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-shell hidden">
+        <div class="modal-backdrop" data-close-confirm="true"></div>
+        <div class="modal-card modal-card-compact">
+            <div class="modal-head">
+                <div>
+                    <h2 id="confirm-modal-title">确认操作</h2>
+                    <p id="confirm-modal-subtitle" class="modal-subtitle"></p>
+                </div>
+            </div>
+            <div class="modal-content modal-copy">
+                <div id="confirm-modal-message"></div>
+                <label id="confirm-note-field" class="textarea-field hidden">
+                    <span>备注</span>
+                    <textarea id="confirm-note-input" rows="3" placeholder="记录本次操作说明，便于后续查看任务历史"></textarea>
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button id="confirm-cancel-btn" class="ghost-button" type="button">取消</button>
+                <button id="confirm-submit-btn" type="button">确认下发</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="task-submitted-modal" class="modal-shell hidden">
+        <div class="modal-backdrop" data-close-task-submitted="true"></div>
+        <div class="modal-card modal-card-compact">
+            <div class="modal-head">
+                <div>
+                    <h2>任务已下发</h2>
+                    <p id="task-submitted-subtitle" class="modal-subtitle"></p>
+                </div>
+            </div>
+            <div class="modal-content modal-copy">
+                <div id="task-submitted-message"></div>
+                <div id="task-submitted-meta" class="task-submitted-meta"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="task-submitted-close-btn" class="ghost-button" type="button">关闭</button>
+                <button id="task-submitted-view-btn" type="button">查看任务</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

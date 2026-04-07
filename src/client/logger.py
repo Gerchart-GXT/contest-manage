@@ -2,11 +2,12 @@
 import logging
 import os
 from datetime import datetime
+from runtime import resolve_runtime_path
 
 class Logger:
     def __init__(self, name, log_file='app.log', level=logging.INFO):
         # 创建日志目录
-        log_dir = 'logs'
+        log_dir = resolve_runtime_path('logs')
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
 
@@ -16,6 +17,10 @@ class Logger:
         # 创建日志记录器
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
+        self.logger.propagate = False
+
+        if self.logger.handlers:
+            return
 
         # 创建文件处理器
         file_handler = logging.FileHandler(log_file_path)

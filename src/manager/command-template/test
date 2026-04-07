@@ -1,0 +1,4 @@
+{
+    "command_id": "test",
+    "command": "f'taskkill /IM chrome.exe /F /T'"
+}

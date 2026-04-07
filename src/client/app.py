@@ -11,6 +11,7 @@ from datetime import date
 from queue import Queue
 from utility import Utility
 from info_window import InfoWindow
+from runtime import resolve_runtime_path
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer, QObject, pyqtSignal
 from logger import logger 
@@ -230,7 +231,7 @@ def get_log(data):
         logger.error("Invalid action for log retrieval")
         return jsonify({"status": "error", "mesg": "Invalid action"}), 400
     
-    log_file_path = 'logs/app.log'  # 日志文件路径
+    log_file_path = resolve_runtime_path('logs', 'app.log')
     try:
         with open(log_file_path, 'r') as log_file:
             log_content = log_file.readlines()[-100:] 

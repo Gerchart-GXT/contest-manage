@@ -28,8 +28,10 @@ def read_client_excel():
     global CLIENT_DATA
     global CLIENT_EXCEL_PATH
     global CLIENT_EXCEL_TITLE
+    CLIENT_DATA.clear()
     try:
-        df = pd.read_excel(CLIENT_EXCEL_PATH)
+        real_excel_path = UTILITY.resolve_path(CLIENT_EXCEL_PATH)
+        df = pd.read_excel(real_excel_path)
         required_columns = list(CLIENT_EXCEL_TITLE.values())
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -39,13 +41,13 @@ def read_client_excel():
                 key: row[alias] for key, alias in CLIENT_EXCEL_TITLE.items()
             }
             CLIENT_DATA.append(client_info)
-        logger.info(f"Read client Excel {CLIENT_EXCEL_PATH} successfully!")
+        logger.info(f"Read client Excel {real_excel_path} successfully!")
     except FileNotFoundError:
-        logger.error(f"File {CLIENT_EXCEL_PATH} not exist!")
+        logger.error(f"File {UTILITY.resolve_path(CLIENT_EXCEL_PATH)} not exist!")
     except PermissionError:
-        logger.error(f"Have no permission to read {CLIENT_EXCEL_PATH}！")
+        logger.error(f"Have no permission to read {UTILITY.resolve_path(CLIENT_EXCEL_PATH)}！")
     except Exception as e:
-        logger.error(f"Reading {CLIENT_EXCEL_PATH} ERROR: {e}")
+        logger.error(f"Reading {UTILITY.resolve_path(CLIENT_EXCEL_PATH)} ERROR: {e}")
 
 def write_client_excel():
     global CLIENT_EXCEL_PATH
@@ -59,8 +61,9 @@ def write_client_excel():
     df.rename(columns=CLIENT_EXCEL_TITLE, inplace=True)
 
     # 将 DataFrame 写入 Excel 文件
-    df.to_excel(CLIENT_EXCEL_PATH, index=False)
-    logger.info(f"Save client Excel {CLIENT_EXCEL_PATH} successfully!")
+    real_excel_path = UTILITY.resolve_path(CLIENT_EXCEL_PATH)
+    df.to_excel(real_excel_path, index=False)
+    logger.info(f"Save client Excel {real_excel_path} successfully!")
 
 def is_valid_ipv4(ip):
     pattern = r'^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$'
@@ -781,8 +784,9 @@ def main():
             else:
                 fail += 1
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client info failed!")
-        if not os.path.exists("client-status"):
-            os.makedirs("client-status")
+        client_status_dir = UTILITY.resolve_path("client-status")
+        if not os.path.exists(client_status_dir):
+            os.makedirs(client_status_dir)
         UTILITY.save_json_file(f"client-status/{datetime.now().strftime("%y-%m-%d-%H:%M:%S")}.json", response)
         logger.info(f"Get client status: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "get-client-log":
@@ -795,8 +799,9 @@ def main():
             else:
                 fail += 1
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} set client log failed!")
-        if not os.path.exists("client-log"):
-            os.makedirs("client-log")
+        client_log_dir = UTILITY.resolve_path("client-log")
+        if not os.path.exists(client_log_dir):
+            os.makedirs(client_log_dir)
         UTILITY.save_json_file(f"client-log/{datetime.now().strftime("%y-%m-%d-%H:%M:%S")}.json", response)
         logger.info(f"Get client log: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "open-info-window":
@@ -854,4 +859,3 @@ def main():
         logger.error(f"Command Error: {args}")
 if __name__ == "__main__":
     main()
-
