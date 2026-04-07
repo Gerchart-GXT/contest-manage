@@ -4,6 +4,9 @@ from datetime import datetime
 import subprocess
 import threading
 import sys
+import os
+import signal
+import platform
 from datetime import date
 from queue import Queue
 from utility import Utility
@@ -26,6 +29,7 @@ USER_DATA_FILE_LOCK = threading.Lock()
 COMMAND_LOCK = threading.Lock()
 WINDOWS = {}
 GUI_QUEUE = Queue()  # 用于在主线程中处理 GUI 操作
+COMMAND_TASKS = {}
 
 # API Key 校验中间件
 @flask_app.before_request
@@ -63,6 +67,81 @@ def validate_request(required_fields):
         wrapper.__name__ = func.__name__
         return wrapper
     return decorator
+
+
+def get_command_tasks_snapshot(active_only=False):
+    with COMMAND_LOCK:
+        snapshot = {}
+        for command_id, task in COMMAND_TASKS.items():
+            if active_only and task["status"] not in ["running", "kill_requested"]:
+                continue
+            snapshot[command_id] = {
+                "command": task["command"],
+                "status": task["status"],
+                "pid": task["pid"],
+                "started_at": task["started_at"],
+                "ended_at": task["ended_at"],
+                "return_code": task["return_code"]
+            }
+    return snapshot
+
+
+def build_popen_kwargs():
+    popen_kwargs = {
+        "shell": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True
+    }
+    if platform.system().lower() == "windows":
+        creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if creation_flags:
+            popen_kwargs["creationflags"] = creation_flags
+    else:
+        popen_kwargs["start_new_session"] = True
+    return popen_kwargs
+
+
+def terminate_process_tree(process):
+    if process.poll() is not None:
+        return
+    if platform.system().lower() == "windows":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/F", "/T"],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+    else:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+
+
+def monitor_command_task(command_id, process):
+    try:
+        stdout, stderr = process.communicate()
+        with COMMAND_LOCK:
+            task = COMMAND_TASKS.get(command_id)
+            if not task:
+                return
+            task["stdout"] = stdout
+            task["stderr"] = stderr
+            task["return_code"] = process.returncode
+            task["ended_at"] = datetime.now().isoformat()
+            if task["status"] == "kill_requested":
+                task["status"] = "killed"
+            elif process.returncode == 0:
+                task["status"] = "success"
+            else:
+                task["status"] = "error"
+        logger.info(f"Command {command_id} finished with code {process.returncode}")
+    except Exception as e:
+        with COMMAND_LOCK:
+            task = COMMAND_TASKS.get(command_id)
+            if task:
+                task["status"] = "error"
+                task["stderr"] = str(e)
+                task["ended_at"] = datetime.now().isoformat()
+        logger.error(f"Monitor command {command_id} failed: {str(e)}")
 
 @flask_app.route('/client/connect', methods=['POST'])
 @validate_request(['action'])
@@ -139,7 +218,8 @@ def get_status(data):
         "user_data": user,
         "metadata": {
             "timestamp": datetime.now().isoformat(),
-            "active_progress": UTILITY.get_active_progress() 
+            "active_progress": UTILITY.get_active_progress(),
+            "active_commands": get_command_tasks_snapshot(active_only=True)
         }
     })
 
@@ -187,38 +267,95 @@ def handle_info(data):
 
 # 命令执行接口
 @flask_app.route('/client/command', methods=['POST'])
-@validate_request(['action', 'content'])
+@validate_request(['action', 'command_id'])
 def execute_command(data):
-    if data['action'] != 'run':
+    action = data['action'].lower()
+    command_id = str(data['command_id'])
+
+    if action not in ['run', 'kill']:
         logger.error("Invalid action")
         return jsonify({"status": "error", "mesg": "Invalid action"}), 400
-    
-    command = data['content']
-    if not command:
-        logger.error("Empty command")
-        return jsonify({"status": "error", "mesg": "Empty command"}), 400
-    
-    try:
-        with COMMAND_LOCK:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            output = f"STDOUT: {result.stdout} \nSTDERR: {result.stderr}"
-            logger.info(f"Command executed successfully: {output}")
+
+    if action == 'run':
+        command = data.get('content')
+        if not command:
+            logger.error("Empty command")
+            return jsonify({"status": "error", "mesg": "Empty command"}), 400
+
+        try:
+            with COMMAND_LOCK:
+                current_task = COMMAND_TASKS.get(command_id)
+                if current_task and current_task["status"] in ["running", "kill_requested"]:
+                    logger.warning(f"Command {command_id} is already running")
+                    return jsonify({
+                        "status": "error",
+                        "mesg": f"Command {command_id} is already running"
+                    }), 409
+
+            process = subprocess.Popen(command, **build_popen_kwargs())
+            with COMMAND_LOCK:
+                COMMAND_TASKS[command_id] = {
+                    "command": command,
+                    "status": "running",
+                    "pid": process.pid,
+                    "started_at": datetime.now().isoformat(),
+                    "ended_at": None,
+                    "return_code": None,
+                    "stdout": "",
+                    "stderr": "",
+                    "process": process
+                }
+
+            threading.Thread(
+                target=monitor_command_task,
+                args=(command_id, process),
+                daemon=True
+            ).start()
+            logger.info(f"Command {command_id} started asynchronously, pid={process.pid}")
             return jsonify({
                 "status": "success",
-                "mesg": output
+                "mesg": f"Command {command_id} started",
+                "command_id": command_id,
+                "pid": process.pid
             })
+        except Exception as e:
+            logger.error(f"Exception occurred: {str(e)}")
+            return jsonify({"status": "error", "mesg": str(e)}), 500
+
+    try:
+        with COMMAND_LOCK:
+            task = COMMAND_TASKS.get(command_id)
+            if not task:
+                logger.error(f"Command {command_id} not found")
+                return jsonify({
+                    "status": "error",
+                    "mesg": f"Command {command_id} not found"
+                }), 404
+            if task["status"] not in ["running", "kill_requested"]:
+                logger.warning(f"Command {command_id} is not running")
+                return jsonify({
+                    "status": "error",
+                    "mesg": f"Command {command_id} is not running"
+                }), 409
+            task["status"] = "kill_requested"
+            process = task["process"]
+
+        terminate_process_tree(process)
+        logger.info(f"Kill command {command_id} request sent")
+        return jsonify({
+            "status": "success",
+            "mesg": f"Kill command {command_id} request sent",
+            "command_id": command_id
+        })
     except subprocess.TimeoutExpired:
-        logger.error("Command timeout")
-        return jsonify({"status": "error", "mesg": "Command timeout"}), 408
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with return code {e.returncode}: {e.stderr}")
-        return jsonify({"status": "error", "mesg": f"Command failed: {e.stderr}"}), 500
+        logger.error(f"Kill command {command_id} timeout")
+        return jsonify({"status": "error", "mesg": "Kill command timeout"}), 408
+    except ProcessLookupError:
+        logger.warning(f"Command {command_id} already exited")
+        return jsonify({
+            "status": "error",
+            "mesg": f"Command {command_id} already exited"
+        }), 409
     except Exception as e:
         logger.error(f"Exception occurred: {str(e)}")
         return jsonify({"status": "error", "mesg": str(e)}), 500
@@ -266,7 +403,11 @@ if __name__ == '__main__':
             USER_DATA = _["res"]
     
     # 启动 Flask 服务器
-    flask_thread = threading.Thread(target=flask_app.run, kwargs={'host': '0.0.0.0', 'port': 8088}, daemon=True)
+    flask_thread = threading.Thread(
+        target=flask_app.run,
+        kwargs={'host': '0.0.0.0', 'port': 8088, 'threaded': True, 'use_reloader': False},
+        daemon=True
+    )
     flask_thread.start()
     logger.info("Flask server start!")
     # 在主线程中启动 GUI 事件处理器

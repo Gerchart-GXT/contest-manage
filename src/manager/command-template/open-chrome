@@ -1,3 +1,4 @@
 {
+    "command_id": "open-chrome",
     "command": "f'start chrome.exe {LOCAL_IP}'"
 }

@@ -587,7 +587,7 @@ def close_info_window(window_id, max_workers=50):
     #         logger.error(f"Close info window {client["user_ip"]} {client["user_name"]} Failed!")
     return window_status
 
-def run_command(command, max_workers=50):
+def run_command(command_id, command, max_workers=50):
     global CLIENT_DATA
     global LOCAL_IP
     command_return = []
@@ -626,7 +626,7 @@ def run_command(command, max_workers=50):
             })
         api_key = generate_api_key(client["user_ip"])
         client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
-        response = client_connect.execute_command(eval(command))
+        response = client_connect.execute_command(command_id, eval(command))
         if(response["status"] == "success"):
             logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
         else:
@@ -655,6 +655,61 @@ def run_command(command, max_workers=50):
     #         logger.info(f"Run command {client["user_ip"]}  {client["user_name"]} successfully!")
     #     else:
     #         logger.error(f"Run command {client["user_ip"]} {client["user_name"]} Failed!")
+    return command_return
+
+
+def kill_command(command_id, max_workers=50):
+    global CLIENT_DATA
+    command_return = []
+
+    def kill_one(client):
+        if REG_FILTER["active"]:
+            if not re.match(REG_FILTER["user_name"]["reg"], str(client["user_name"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["user_id"]["reg"], str(client["user_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["ip"]["reg"], str(client["user_ip"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+            if not re.match(REG_FILTER["group_id"]["reg"], str(client["group_id"])):
+                logger.error(f"Regular expr not match! {client["user_ip"]} {client["user_name"]}!")
+                return (client, {
+                    "status": "error",
+                    "mesg": "Regular expr not match!"
+                })
+        if not is_valid_ipv4(client["user_ip"]):
+            logger.error(f"IP format ERROR: {client["user_ip"]} {client["user_name"]}!")
+            return (client, {
+                "status": "error",
+                "mesg": "IP format ERROR"
+            })
+        api_key = generate_api_key(client["user_ip"])
+        client_connect = APIClient(f"http://{client["user_ip"]}:8088", api_key)
+        response = client_connect.kill_command(command_id)
+        if(response["status"] == "success"):
+            logger.info(f"Kill command {client["user_ip"]}  {client["user_name"]} successfully!")
+        else:
+            logger.error(f"Kill command {client["user_ip"]} {client["user_name"]} Failed!")
+        return (client, response)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(kill_one, client): client for client in CLIENT_DATA}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                command_return.append(result)
+
     return command_return
 
 def main():
@@ -771,7 +826,7 @@ def main():
         logger.info(f"Close info window: Success {success}, Fail {fail}, total {success + fail}")
     elif args[0] == "run-command":
         command_info = UTILITY.read_json_file("command.json")["res"]
-        response= run_command(command_info["command"])
+        response= run_command(str(command_info["command_id"]), command_info["command"])
         success = 0
         fail = 0
         for client, res in response:
@@ -782,9 +837,21 @@ def main():
                 logger.warning(f"{client["user_name"]}-{client["user_ip"]} run command failed!")
         UTILITY.save_json_file(f"command-log.json", response)
         logger.info(f"Run command: Success {success}, Fail {fail}, total {success + fail}")
+    elif args[0] == "kill-command":
+        command_info = UTILITY.read_json_file("command.json")["res"]
+        response= kill_command(str(command_info["command_id"]))
+        success = 0
+        fail = 0
+        for client, res in response:
+            if res["status"] == "success":
+                success += 1
+            else:
+                fail += 1
+                logger.warning(f"{client["user_name"]}-{client["user_ip"]} kill command failed!")
+        UTILITY.save_json_file(f"command-log.json", response)
+        logger.info(f"Kill command: Success {success}, Fail {fail}, total {success + fail}")
     else:
         logger.error(f"Command Error: {args}")
 if __name__ == "__main__":
     main()
-
 

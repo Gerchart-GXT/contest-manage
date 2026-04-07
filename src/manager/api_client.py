@@ -14,19 +14,25 @@ class APIClient:
     def _make_request(self, url, payload):
         try:
             response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=30)
-            response.raise_for_status()  # 检查HTTP状态码，如果不是200，抛出HTTPError
-            return response.json()
+            try:
+                response_json = response.json()
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON response: {e}")
+                return {
+                    "status": "error",
+                    "mesg": f"Failed to decode JSON response: {e}"
+                }
+
+            if response.ok:
+                return response_json
+
+            logger.error(f"Request {url} failed: {response.status_code} {response_json}")
+            return response_json
         except requests.exceptions.RequestException as e:
             logger.error(f"Request {url} failed: {e}")
             return {
                 "status": "error",
                 "mesg": f"Request failed: {e}"
-            }
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode JSON response: {e}")
-            return {
-                "status": "error",
-                "mesg": f"Failed to decode JSON response: {e}"
             }
         
     def connect_check(self):
@@ -74,11 +80,21 @@ class APIClient:
         logger.info(f"Window {window_id} {action}, {self.base_url}/client/info")
         return self._make_request(url, payload)
 
-    def execute_command(self, command):
+    def execute_command(self, command_id, command):
         url = f"{self.base_url}/client/command"
         payload = {
             "action": "run",
+            "command_id": command_id,
             "content": command
         }
         logger.info(f"Run command {self.base_url}/client/command")
+        return self._make_request(url, payload)
+
+    def kill_command(self, command_id):
+        url = f"{self.base_url}/client/command"
+        payload = {
+            "action": "kill",
+            "command_id": command_id
+        }
+        logger.info(f"Kill command {self.base_url}/client/command")
         return self._make_request(url, payload)
