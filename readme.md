@@ -1,323 +1,348 @@
-# 比赛管理程序使用手册
+# Contest Manager
 
-* 本软件已在某赛点正式赛使用，软件功能一切正常，欢迎使用下载！
+> 面向线下编程竞赛、机房考试与集中化上机环境的轻量级考场管理工具。
 
-## 简介
+Contest Manager 采用管理端 + 考生端的 C/S 架构。管理端运行在教师机或赛点管理机上，考生端运行在每台 Windows 考生机上；管理端通过局域网 HTTP API 批量完成连通性检查、名单绑定、考生信息下发、命令执行、公告弹窗、日志采集与状态巡检。
 
-本软件基于C/S架构进行设计，每台考生机器上部署一台Web服务器，管理机通过http请求对考生机器进行管理，实现如下主干功能：
+本项目已在实际赛点环境中使用。当前版本以 Web 管理面板为主线能力，并加入异步并行 command 执行、基于客户端 Command ID 的命令生命周期管理，降低赛前准备和赛中应急操作成本。
 
-1. 考场机器连通情况查询（基于Ping命令）
-2. 考生机客户端基本信息配置，包括且不限于考生姓名，准考证号等
-3. 考生机客户端连通情况查询
-4. 考生机信息提示框打开/关闭，提示信息支持`HTML/CSS/JS`
-5. 考生机系统命令执行
-6. 考生机客户端日志获取
-7. 按ip/考生号/考生姓名/考试组，正则选取/过滤考生机器
+## 功能特性
 
-并计划提供试验功能：
+- Web 管理面板：提供配置编辑、名单上传、考生选择、批量操作、任务进度、模板调用和运行日志查看。
+- 考生名单管理：支持从 Excel 读取考生信息，并按考场、机位、IP、组别、考试编号等字段统一管理。
+- 局域网连通检查：支持 IP 段 Ping 扫描和客户端 HTTP Connect Check，区分机器在线与客户端服务在线。
+- 批量信息下发：将考生个人信息写入对应考生端，便于弹窗、日志和命令模板按人渲染。
+- 批量公告弹窗：考生端使用 PyQt 展示置顶信息窗口，内容支持 HTML/CSS/JS 和模板变量。
+- 批量命令执行：管理端可向选中或全部考生机下发系统命令，支持模板化命令内容。
+- 命令生命周期控制：每条命令带 `command_id`，客户端按 ID 跟踪运行状态，并可精准停止指定命令。
+- 并行任务调度：管理端对多台客户端并发请求，Web 端可查看任务进度和结果摘要。
+- 日志与状态采集：可批量拉取客户端状态、活动命令、最近日志，并保存到管理端目录。
+- 正则过滤：支持按 IP、姓名、准考证号、组别进行精准筛选，适合分组、补测、换机等场景。
+- Windows 自启动脚本：提供客户端启动、守护、停止和计划任务安装脚本。
 
-1. 基于倍增的考生机文件下发/接收
-2. 考生机代码备份至数据盘
-3. 考生机活跃窗口获取域活跃进程查询
+## 创新点
 
-## 安装说明
+- 从命令行工具升级为可视化 Web Console：赛点技术人员无需记忆大量 CLI 参数，可在浏览器里完成大多数操作。
+- 修复并强化 `run-command` 并行执行模型：命令下发不再被单台机器阻塞，管理端按考生列表并发执行，提升大机房操作效率。
+- 引入 Windows 客户端 `command_id` 策略：同一考生机可区分 `env-check`、`open-chrome`、`ping-server` 等命令，避免不同命令互相覆盖或误杀。
+- 客户端命令异步执行：考生端收到命令后立即返回启动结果，后台监控 stdout、stderr、return code 和运行状态。
+- 精准 Kill Command：管理端按 `command_id` 下发停止请求，Windows 下使用 `taskkill /PID /F /T` 结束进程树。
+- 面向真实考场流程设计：内置考生信息弹窗、考试提醒模板、环境检查、浏览器打开、断网验证等可复用模板。
+- API Key 按客户端 IP 与日期动态生成：在局域网场景下提供轻量认证，避免未经授权的简单请求直接操作客户端。
 
-### 考生机器程序安装
+## 架构图
 
-1. 下载最新版本客户端`lanqiao_client.zip`压缩包
-2. 将压缩包`lanqiao_client.zip`通过管理机/教师机下发至所有学生机
-3. 将`unzip.bat`通过管理机/教师机下发至所有学生机
-4. 所有学生机运行`unzip.bat`批处理脚本，该脚本会将学生客户端解压至`C:\lanqiao\client`
+```mermaid
+flowchart LR
+    Operator[赛点技术人员 / 监考老师] --> Browser[浏览器 Web Console]
+    Browser --> ManagerWeb[管理端 Flask Web App<br/>0.0.0.0:8090]
+    ManagerWeb --> ManagerService[ManagerService<br/>任务调度 / 状态持久化 / 模板渲染]
+    ManagerService --> Excel[(client.xlsx<br/>考生名单)]
+    ManagerService --> Config[(config.json / filter.json)]
+    ManagerService --> Templates[(command-template<br/>window_template)]
+    ManagerService --> Logs[(client-status<br/>client-log<br/>task-history)]
+    ManagerService --> APIClient[API Client<br/>并发 HTTP 请求]
 
-至此，学生机程序安装完成
+    APIClient --> ClientA[考生端 A<br/>Flask + PyQt<br/>:8088]
+    APIClient --> ClientB[考生端 B<br/>Flask + PyQt<br/>:8088]
+    APIClient --> ClientN[考生端 N<br/>Flask + PyQt<br/>:8088]
 
-### 考生机器程序启动/停止
-
-* 在`C:\lanqiao\client`下有`start_client.bat`和`stop_client.bat`两批处理脚本
-* 启动/重启请让所有学生机运行`start_client.bat`，
-* 停止请让所有学生机运行`stop_client.bat`
-
-### 管理机/教师机程序安装
-
-1. 安装最新版本`Python`和`pip`，并配置好环境变量，保证联网
-2. 下载最新版本源码，建议使用`git clone`
-
-3. 进入源码目录，使用`python -m venv env`创建虚拟环境，并激活虚拟环境
-4. `pip`安装`requirement.txt`
-5. 进入`src/manager`目录，阅读下文使用说明，使用`python main.py <command>`进行使用
-
-## 使用说明
-
-### 管理机配置
-
-#### 机房IP段配置
-
-1. 进入`src/manager/main.py`
-2. 修改机房名称`ROOM_ID = "101"`
-3. 修改`IP_RANGE = "192.168.1.1-150"`进行ip段设置
-4. 修改本地ip `LOCAL_IP = ""`
-
-#### 考生名单导入
-
-1. 在`src/manager/`下新建`client.xlsx`
-
-2. 修改名单变量名映射
-
-    1. 进入`src/manager/main.py`
-
-    2. 修改，字典value为表格表头名，
-
-        ```python
-        CLIENT_EXCEL_TITLE = {
-            "user_id": "考生准考证号", 
-            "user_name": "考生姓名",
-            "user_room": "考生考场",
-            "user_ip": "考生机器IP",
-            "group_id": "组别",
-            "exam_id": "考试编号"
-        }
-        ```
-
-3. 如需更改名单路径可更改`CLIENT_EXCEL_PATH = "./client.xlsx"`
-
-#### 正则Filter配置
-
-* 为满足指定机器的精准控制，引入正则过滤，配置文件位于`src/manager/filter.json`，格式如下（注意特殊符号的转义）：
-
-    ```json
-    {
-        "active": true,
-        "ip": {
-            "reg": "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
-        },
-        "user_name":{
-            "reg": "gerchart"
-        },
-        "user_id": {
-            "reg": ".*"
-        },
-        "group_id": {
-            "reg": "C/C++"
-        }
-    }
-    ```
-
-    * `active`用于开关正则过滤器
-    * `reg`字段输入正则表达式
-
-* 本过滤器生效于一下所有控制方法，若不匹配在日志中会有`2025-04-07 23:31:20,036 - logger - ERROR - Regular expr not match! 10.0.0.25 gerchart!`字样输出，请留意
-
-### 日志系统
-
-* 基于`python`的`logger`模块，服务端和客户端均开发了日志系统，日志存放于文件统计目录的`logs/*.log`下，同步输出在命令行，以供调试和历史记录查看
-
-```
-2025-04-07 23:16:22,821 - logger - INFO - Utility Init.
-2025-04-07 23:16:22,867 - logger - INFO - Read client Excel ./client.xlsx successfully!
-2025-04-07 23:16:22,867 - logger - INFO - Read file from filter.json
-2025-04-07 23:16:22,867 - logger - INFO - Read file successfully : filter.json
-2025-04-07 23:16:22,867 - logger - INFO - Ping test for 10.0.0.23-25
-2025-04-07 23:16:23,881 - logger - INFO - Available ip count: 1
-2025-04-07 23:16:23,881 - logger - WARNING - 10.0.0.23 is lost
-2025-04-07 23:16:23,881 - logger - WARNING - 10.0.0.24 is lost
-2025-04-07 23:16:23,881 - logger - INFO - Ping: Available 1, loss 2, total 3
+    ClientA --> CmdA[Command Tasks<br/>command_id -> process]
+    ClientA --> WindowA[InfoWindow<br/>HTML 公告弹窗]
+    ClientA --> UserA[(user-info.json)]
+    ClientA --> LogA[(logs/app.log)]
 ```
 
-### 初始化
+## 项目结构
 
-#### 考生机连通性测试
+```text
+contest-manage/
+├── readme.md
+├── LICENSE
+├── requirements.txt
+├── doc/
+├── scripts/
+│   └── windows-client/
+│       ├── start_client.bat
+│       ├── stop_client.bat
+│       ├── watch_client.bat
+│       └── install_autorun.bat
+└── src/
+    ├── client/
+    │   ├── app.py
+    │   ├── info_window.py
+    │   └── utility.py
+    ├── manager/
+    │   ├── web_app.py
+    │   ├── manager_service.py
+    │   ├── main.py
+    │   ├── config.json
+    │   ├── filter.json
+    │   ├── command-template/
+    │   ├── window_template/
+    │   └── web/
+    └── tools/
+```
 
-* 运行`python main.py ping`等待运行结束，得到当前可通ip数和不通ip
+## 运行环境
 
-    ```
-    2025-04-07 22:21:27,181 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:21:27,182 - logger - INFO - Ping test for 10.0.0.23-25
-    2025-04-07 22:21:28,198 - logger - INFO - Available ip count: 1
-    2025-04-07 22:21:28,200 - logger - WARNING - 10.0.0.23 is lost
-    2025-04-07 22:21:28,200 - logger - WARNING - 10.0.0.24 is lost
-    2025-04-07 22:21:28,200 - logger - INFO - Ping: Available 1, loss 2, total 3
-    ```
+- Python 3.10+。
+- 管理端支持 Windows、Linux、macOS；实际考场建议运行在 Windows 教师机。
+- 考生端面向 Windows 机房环境，弹窗依赖 PyQt5 / PyQtWebEngine。
+- 管理端与考生端必须处于同一局域网，且考生机 `8088` 端口可访问。
+- Web 管理面板默认监听 `8090` 端口。
 
-#### 进行考生与机器的绑定
+## 配置说明
 
-1. 确保`src/manager/`下已导入名单，并设置好别名
+管理端配置文件位于 `src/manager/config.json`。
 
-2. 运行`python main.py update-client-list`等待运行结束，查看程序输出/日志或名单文件可得到绑定结果
+```json
+{
+  "ROOM_ID": "101",
+  "IP_RANGE": "192.168.1.1-150",
+  "LOCAL_IP": "192.168.1.10",
+  "CLIENT_EXCEL_PATH": "./client.xlsx",
+  "CLIENT_EXCEL_TITLE": {
+    "user_id": "准考证号",
+    "user_name": "学生姓名",
+    "user_room": "考生考场",
+    "user_no": "考生机位号",
+    "user_ip": "考生机器IP",
+    "group_id": "参赛科目",
+    "exam_id": "考试编号"
+  }
+}
+```
 
-    ```
-    2025-04-07 22:26:31,676 - logger - INFO - Utility Init.
-    2025-04-07 22:26:31,727 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:26:31,727 - logger - INFO - Ping test for 10.0.0.23-25
-    2025-04-07 22:26:32,743 - logger - INFO - Available ip count: 1
-    2025-04-07 22:26:32,746 - logger - INFO - Client count 1
-    2025-04-07 22:26:32,746 - logger - INFO - Mapping gerchart(123456) to 10.0.0.25
-    2025-04-07 22:26:32,779 - logger - INFO - Save client Excel ./client.xlsx successfully!
-    ```
+字段含义：
 
-3. 完成初次绑定后根据实际情况进行调整即可，如果有机器需要更换，直接修改名单接口，修改后请勿运行`update-client-list`，否则会重新绑定
-4. 若考生数多于可用机器数，则会将多余考生绑定至`None`
-5. 本绑定只会修改本地的考生名单，不会讲信息下发至考生机，下发请见`考生信息下发`。
+- `ROOM_ID`：当前考场或机房编号。
+- `IP_RANGE`：待扫描客户端 IP 段，格式为 `192.168.1.1-150`。
+- `LOCAL_IP`：教师机或赛点服务器 IP，可用于模板中生成访问地址。
+- `CLIENT_EXCEL_PATH`：考生名单路径，相对路径以 `src/manager` 为基准。
+- `CLIENT_EXCEL_TITLE`：程序内部字段到 Excel 表头的映射。
 
-#### 考生信息下发
+正则过滤文件位于 `src/manager/filter.json`。启用后，批量操作只作用于匹配的客户端。
 
-* 在完成绑定后，确认绑定信息无误，建议首先备份考生名单，防止误操作运行`update-client-list`覆盖
+```json
+{
+  "active": true,
+  "ip": {"reg": "^192\\.168\\.1\\."},
+  "user_name": {"reg": ""},
+  "user_id": {"reg": ""},
+  "group_id": {"reg": "C/C\\+\\+"}
+}
+```
 
-1. 运行`python main.py set-client-info`，即可将考生信息下发至客户端，完成下发后，客户端目录的`user-info.json`将为考生信息
+## Quick Start
 
-    ```
-    2025-04-07 22:32:32,986 - logger - INFO - Utility Init.
-    2025-04-07 22:32:33,035 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:32:33,035 - logger - INFO - Set user http://10.0.0.25:8088/client/user, {'user_id': 123456, 'user_name': 'gerchart', 'user_room': 101, 'user_ip': '10.0.0.25', 'group_id': 'C/C++', 'exam_id': 'laoqiao'}
-    2025-04-07 22:32:33,050 - logger - INFO - Set client info: Success 1, Fail 0, total 1
-    ```
+### 1. 克隆项目
 
-### 考生客户端连接性测试
+```bash
+git clone git@github.com:Gerchart-GXT/contest-manage.git
+cd contest-manage
+```
 
-* 客户端连通性测试测试的是考生客户端的工作状态，请与前文ping测试区分
+如果没有配置 SSH，也可以使用 HTTPS：
 
-1. 运行`python main.py connect-check`，查看程序输出/日志获取测试结果
+```bash
+git clone https://github.com/Gerchart-GXT/contest-manage.git
+cd contest-manage
+```
 
-    ```
-    2025-04-07 22:36:23,348 - logger - INFO - Utility Init.
-    2025-04-07 22:36:23,413 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:36:23,413 - logger - INFO - Connect to http://10.0.0.25:8088/client/connect
-    2025-04-07 22:36:23,423 - logger - INFO - Connect to 10.0.0.25 gerchart successfully!
-    2025-04-07 22:36:23,426 - logger - INFO - Connect client info: Success 1, Fail 0, total 1
-    ```
+### 2. 安装 Python 依赖
 
-### 考生客户端状态与日志获取
+下方命令中的 `python` 可按本机环境替换为 `py` 或 `python3`。
 
-* 通过获取客户端状态与日志可以清楚查看考生客户端的工作历史
-* 日志获取为最后100条记录，若机房机器过多可能会短暂占用带宽
+Windows PowerShell：
 
-#### 状态获取
+```powershell
+python -m venv env
+.\env\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-1. 运行`python main.py get-client-status`，查看程序输出/日志获取测试结果
+Windows CMD：
 
-    ```
-    2025-04-07 22:40:48,183 - logger - INFO - Utility Init.
-    2025-04-07 22:40:48,247 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:40:48,248 - logger - INFO - Get status http://10.0.0.25:8088/client/status
-    2025-04-07 22:40:48,255 - logger - INFO - Get client status 10.0.0.25  gerchart successfully!
-    2025-04-07 22:40:48,256 - logger - INFO - Save file to client-status/25-04-07-22:40:48.json
-    2025-04-07 22:40:48,256 - logger - INFO - Save file successfully : client-status/25-04-07-22:40:48.json
-    2025-04-07 22:40:48,256 - logger - INFO - Get client status: Success 1, Fail 0, total 1
-    ```
+```bat
+python -m venv env
+env\Scripts\activate.bat
+pip install -r requirements.txt
+```
 
-2. 客户端状态会存储在`src/manager/client-status/[Timestamp].json`，打开查看即可
+Linux / macOS：
 
-    ```json
-    [
-        [
-            {
-                "user_id": 123456,
-                "user_name": "gerchart",
-                "user_room": 101,
-                "user_ip": "10.0.0.25",
-                "group_id": "C/C++",
-                "exam_id": "laoqiao"
-            },
-            {
-                "mesg": "Get status successfully",
-                "metadata": {
-                    "active_progress": [],
-                    "timestamp": "2025-04-07T22:40:48.255111"
-                },
-                "status": "success",
-                "user_data": {
-                    "exam_id": "laoqiao",
-                    "group_id": "C/C++",
-                    "user_id": 123456,
-                    "user_ip": "10.0.0.25",
-                    "user_name": "gerchart",
-                    "user_room": 101
-                }
-            }
-        ]
-    ]
-    ```
+```bash
+python -m venv env
+source env/bin/activate
+pip install -r requirements.txt
+```
 
-#### 日志获取
+### 3. 准备管理端配置
 
-1. 运行`python main.py get-client-log`，查看程序输出/日志获取测试结果
+进入管理端目录：
 
-    ```
-    2025-04-07 22:42:29,059 - logger - INFO - Utility Init.
-    2025-04-07 22:42:29,130 - logger - INFO - Read client Excel ./client.xlsx successfully!
-    2025-04-07 22:42:29,130 - logger - INFO - Get log http://10.0.0.25:8088/client/log
-    2025-04-07 22:42:29,138 - logger - INFO - Get client logs 10.0.0.25  gerchart successfully!
-    2025-04-07 22:42:29,138 - logger - INFO - Save file to client-log/25-04-07-22:42:29.json
-    2025-04-07 22:42:29,138 - logger - INFO - Save file successfully : client-log/25-04-07-22:42:29.json
-    2025-04-07 22:42:29,138 - logger - INFO - Get client log: Success 1, Fail 0, total 1
-    ```
+```bash
+cd src/manager
+```
 
-2. 客户端日志会存储在`src/manager/client-log/[Timestamp].json`，打开查看即可
+准备 `client.xlsx`，并确认 `config.json` 中的 `CLIENT_EXCEL_TITLE` 与 Excel 表头一致。建议至少包含准考证号、姓名、考场、机位、IP、组别等字段。
 
-    ```
-    [
-        [
-            {
-                "user_id": 123456,
-                "user_name": "gerchart",
-                "user_room": 101,
-                "user_ip": "10.0.0.25",
-                "group_id": "C/C++",
-                "exam_id": "laoqiao"
-            },
-            {
-                "log_content": [
-                    "2025-04-07 22:32:15,332 - logger - INFO - Utility Init.\n",
-                    "2025-04-07 22:32:15,332 - logger - INFO - Get local ipv4!\n",
-                    "2025-04-07 22:32:15,332 - logger - INFO - Get local ipv4 successfully: 10.0.0.25\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Generate API-KEY: dd18e34fe5634c7b9414cef1ab608081\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Save file to ./api-key.json\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Save file successfully : ./api-key.json\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Read file from ./user-info.json\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Read file successfully : ./user-info.json\n",
-                    "2025-04-07 22:32:15,333 - logger - INFO - Flask server start!\n",
-                    "2025-04-07 22:32:16,953 - logger - INFO - Save file to ./user-info.json\n",
-                    "2025-04-07 22:32:16,953 - logger - INFO - Save file successfully : ./user-info.json\n",
-                    "2025-04-07 22:32:16,953 - logger - INFO - User info saved successfully: {'user_id': 123456, 'user_name': 'gerchart', 'user_room': 101, 'user_ip': '10.0.0.25', 'group_id': 'C/C++', 'exam_id': 'laoqiao'}\n",
-                    "2025-04-07 22:32:33,043 - logger - INFO - Save file to ./user-info.json\n",
-                    "2025-04-07 22:32:33,043 - logger - INFO - Save file successfully : ./user-info.json\n",
-                    "2025-04-07 22:32:33,043 - logger - INFO - User info saved successfully: {'user_id': 123456, 'user_name': 'gerchart', 'user_room': 101, 'user_ip': '10.0.0.25', 'group_id': 'C/C++', 'exam_id': 'laoqiao'}\n",
-                    "2025-04-07 22:40:48,254 - logger - INFO - Status retrieved successfully for user: {'user_id': 123456, 'user_name': 'gerchart', 'user_room': 101, 'user_ip': '10.0.0.25', 'group_id': 'C/C++', 'exam_id': 'laoqiao'}\n"
-                ],
-                "mesg": "Log file retrieved successfully",
-                "status": "success"
-            }
-        ]
-    ]
-    ```
+### 4. 启动 Web 管理面板
 
-### 考生机信息提示框开启/关闭
+```bash
+python web_app.py
+```
 
-* 本方案基于QT，理论上所有系统均支持，渲染的页面尊循`HTML`规范，支持自定义字体大小，默认最大化置顶，由管理端统一开启/关闭窗口（也可手动关闭）效果如图：![1744040855127.JPG](https://picture.imgxt.com/local/1/2025/04/07/67f3f398e12c7.png)
-* 每个窗口通过唯一的`window_id`进行标识，同一标识页面不可重复开启，若重复调用除非手动关闭，否则只会显示第一次调用内容
+在浏览器打开：
 
-1. 运行`python main.py open-info-window <window_id>`，`window_id`为正整数，此时会从`src/manager/`下读取`window.json`文件内容，`window.json`文件格式如下：
+```text
+http://127.0.0.1:8090
+```
 
-    ```json
-    {
-        "title": "考生信息",
-        "content": "f\"<h1>第十六届蓝桥杯大赛江苏省赛（软件类）–河海大学赛点</h1><h2>考场号: {client[\"user_room\"]}</h2><h2>考生姓名：{client[\"user_name\"]}</h2><h2>考生准考证号：{client[\"user_id\"]}</h2><h2>考生组别：{client[\"group_id\"]}</h2><h3>请遵守考场纪律，严禁作弊，祝你考试顺利！</h3><p>&nbsp;</p>\"",
-        "front_size": 50
-    }
-    ```
+在面板中可以完成配置保存、Excel 上传、名单刷新、Ping、Connect Check、考生信息下发、批量命令和公告弹窗。
 
-    * `content`字段请使用`f-string`，可根据实际需求嵌入考生信息，如需显示更多信息请阅读源码`def open_info_window(title, content, window_id, front_size, max_workers=50)`函数部分
+### 5. 启动考生端
 
-2. 开启后可以运行``python main.py close-info-window <window_id>`进行关闭，`window_id`请保持与开启一致
+开发调试时，可直接在考生机运行：
 
-### 考生机命令执行
+```bash
+cd src/client
+python app.py
+```
 
-* 命令执行权限取决于考生机用户权限
-* 配合正则filter可以实现对单独机器或某组机器的指令单独执行，适合于蓝桥杯等不用比赛环境的批量配置，同时也适用于批量检测环境配置结果等
+正式 Windows 考场部署时，建议将客户端打包为 `lanqiao_client.exe`，并放置到：
 
-1. 运行`python main.py run-command`，此时会从`src/manager/`下读取`command.json`文件内容，`command.json`文件格式如下：
+```text
+C:\lanqiao\client
+```
 
-    ```json
-    {
-        "command": "ping 127.0.0.1 -c 4"
-    }
-    ```
+仓库中的 Windows 脚本负责启动、停止和守护该 exe，不包含打包产物本身。准备好 `C:\lanqiao\client\lanqiao_client.exe` 后，可通过教师端远程命令执行：
+
+```bat
+C:\lanqiao\client\start_client.bat
+```
+
+如需安装开机或登录后自动守护，可在管理员权限下执行：
+
+```bat
+C:\lanqiao\client\install_autorun.bat
+```
+
+### 6. 验证链路
+
+在 Web 面板中依次执行：
+
+1. `Ping`：确认 IP 段内机器在线情况。
+2. `Connect Check`：确认考生端 `8088` 服务已启动。
+3. `下发考生信息`：将名单中的考生信息写入对应客户端。
+4. `获取状态`：确认客户端可返回用户信息、活动命令和时间戳。
+
+### 7. 执行常用考场动作
+
+使用 Web 面板的命令模板：
+
+- `env-check`：检查 Python、Java、GCC、Node.js 版本。
+- `open-chrome`：在考生机打开浏览器访问赛点服务器。
+- `close-chrome`：关闭考生机 Chrome。
+- `ping-server`：测试考生机到教师机或赛点服务器的网络。
+- `ping-baidu`：用于断外网后验证外网解析或访问是否失败。
+
+使用 Web 面板的窗口模板：
+
+- `info`：显示考生信息、机位号和登录链接。
+- `8-45`、`10`、`12-45`、`13`：考试节点公告。
+- `password`：下发试题解压密码提示。
+
+## CLI 兼容入口
+
+当前版本推荐使用 Web 管理面板，Web 面板直接调用 `ManagerService`，是主要维护路径。仓库仍保留 `src/manager/main.py` 作为兼容入口，适合脚本化或无浏览器环境。
+
+```bash
+cd src/manager
+python main.py ping
+python main.py connect-check
+python main.py set-client-info
+python main.py get-client-status
+python main.py get-client-log
+python main.py run-command
+python main.py kill-command
+python main.py open-info-window 1
+python main.py close-info-window 1
+```
+
+CLI 的 `run-command` 和 `kill-command` 读取 `src/manager/command.json`。Web 面板则可以直接选择 `command-template` 中的模板，并通过表单里的 `Command ID` 控制客户端命令实例。
+
+## 命令模板
+
+命令模板存放于 `src/manager/command-template/`，JSON 格式如下：
+
+```json
+{
+  "command_id": "env-check",
+  "command": "f'python --version && java -version && gcc --version && node -v'"
+}
+```
+
+模板支持 Python f-string 风格，当前可用变量：
+
+- `LOCAL_IP`：来自 `config.json`。
+- `client`：当前考生数据字典，例如 `client["user_name"]`、`client["user_no"]`、`client["user_ip"]`。
+
+命令 ID 建议稳定且语义化，例如 `env-check`、`open-chrome`、`exam-server-check`。Web 面板套用模板后仍可手动调整 `Command ID`；同一客户端上相同 `command_id` 同时只能运行一个实例，防止重复下发导致进程失控。
+
+## 窗口模板
+
+窗口模板存放于 `src/manager/window_template/`，JSON 格式如下：
+
+```json
+{
+  "title": "考生信息",
+  "content": "f'<h1>{client[\"user_name\"]}</h1><p>机位：{client[\"user_no\"]}</p>'",
+  "front_size": 40
+}
+```
+
+窗口内容支持 HTML/CSS/JS，可用于考生信息确认、考场纪律提醒、考试倒计时提示和密码公告。
+
+## 安全说明
+
+- 本项目设计目标是可信局域网内的考场辅助管理，不建议暴露到公网。
+- 管理端会根据客户端 IP 与当天日期生成 API Key，客户端仅接受带有正确 `X-Api-Key` 的敏感请求。
+- `run-command` 具备执行系统命令的能力，请只在可信管理机使用，并严格控制模板来源。
+- 模板渲染使用 f-string 风格表达式，请不要加载不可信模板。
+- 正式比赛前建议固定 `config.json`、`filter.json` 和 `client.xlsx`，避免误操作导致名单覆盖。
+
+## 常见问题
+
+### Ping 成功但 Connect Check 失败
+
+机器在线，但客户端服务没有启动、被防火墙拦截，或考生机尚未进入正确系统。请检查 `C:\lanqiao\client\start_client.bat` 是否执行成功，确认 `8088` 端口可访问。
+
+### Connect Check 成功但下发信息失败
+
+通常是 Excel 字段映射不完整、客户端写入目录无权限，或 API Key 与 IP 不匹配。请检查 `config.json`、客户端本机 IP 和管理端日志。
+
+### Run Command 返回成功但命令没有效果
+
+返回成功表示客户端已启动该命令，不代表业务动作一定完成。请使用 `获取状态` 查看 `active_commands`，或使用 `获取日志` 检查 stdout、stderr 和 return code。
+
+### Kill Command 找不到命令
+
+请确认停止时使用的 `Command ID` 与运行时一致。例如用 `env-check` 启动，就必须用 `env-check` 停止。
+
+## Roadmap
+
+- 文件分发与回收。
+- 代码备份到数据盘。
+- 客户端活跃窗口与活跃进程巡检。
+- 更细粒度的角色权限与操作审计。
+- 一键打包管理端和客户端发行包。
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。建议贡献前先说明使用场景、机房规模、操作系统版本和复现步骤，便于判断是否属于通用需求。
+
+## License
+
+本项目基于 MIT License 开源，详见 [LICENSE](LICENSE)。
